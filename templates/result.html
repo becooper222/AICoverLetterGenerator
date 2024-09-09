@@ -7,10 +7,17 @@
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
-    <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-3xl">
+    <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-4xl">
         <h1 class="text-2xl font-bold mb-6 text-center">Analysis Result</h1>
-        <div class="bg-gray-50 p-4 rounded-md">
-            <pre class="whitespace-pre-wrap">{{ combined_output }}</pre>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-gray-50 p-4 rounded-md">
+                <h2 class="text-xl font-semibold mb-2">Input Summary</h2>
+                <pre class="whitespace-pre-wrap text-sm">{{ combined_output }}</pre>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-md">
+                <h2 class="text-xl font-semibold mb-2">Cover Letter Suggestion</h2>
+                <div class="whitespace-pre-wrap text-sm">{{ cover_letter_suggestion }}</div>
+            </div>
         </div>
         <div class="mt-6 text-center">
             <a href="/" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">

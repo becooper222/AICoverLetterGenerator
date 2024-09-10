@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analysis Result</title>
+    <title>Cover Letter Generation Result</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
@@ -12,18 +12,38 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="bg-gray-50 p-4 rounded-md">
                 <h2 class="text-xl font-semibold mb-2">Input Summary</h2>
-                <pre class="whitespace-pre-wrap text-sm">{{ combined_output }}</pre>
+                <pre class="whitespace-pre-wrap text-sm">{{ submission.focus_areas }}</pre>
             </div>
             <div class="bg-gray-50 p-4 rounded-md">
                 <h2 class="text-xl font-semibold mb-2">Cover Letter Suggestion</h2>
-                <div class="whitespace-pre-wrap text-sm">{{ cover_letter_suggestion }}</div>
+                <div class="whitespace-pre-wrap text-sm" id="cover-letter-preview">{{ submission.cover_letter[:500] }}{% if submission.cover_letter|length > 500 %}...{% endif %}</div>
+                {% if submission.cover_letter|length > 500 %}
+                <button onclick="toggleFullCoverLetter()" class="mt-2 text-blue-500 hover:text-blue-700">View Full Cover Letter</button>
+                {% endif %}
             </div>
         </div>
+        <div class="hidden whitespace-pre-wrap text-sm" id="full-cover-letter">{{ submission.cover_letter }}</div>
         <div class="mt-6 text-center">
-            <a href="/" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                Back to Home
+            <a href="{{ url_for('dashboard') }}" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 inline-block">
+                Back to Dashboard
             </a>
         </div>
     </div>
+    <script>
+    function toggleFullCoverLetter() {
+        const preview = document.getElementById('cover-letter-preview');
+        const full = document.getElementById('full-cover-letter');
+        const button = document.querySelector('button');
+        if (preview.classList.contains('hidden')) {
+            preview.classList.remove('hidden');
+            full.classList.add('hidden');
+            button.textContent = 'View Full Cover Letter';
+        } else {
+            preview.classList.add('hidden');
+            full.classList.remove('hidden');
+            button.textContent = 'Show Preview';
+        }
+    }
+    </script>
 </body>
 </html>

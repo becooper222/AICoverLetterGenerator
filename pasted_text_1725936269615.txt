@@ -1,0 +1,15 @@
+add_plan_step(description='Format displaying and exporting of cover letter', success_criteria='Cover letter is properly formatted and exported in a readable format', user_message='I will work on formatting for displaying and exporting cover letters.')
+
+add_plan_step(description='Identify company and job title from the job description and add both to file name and dashboard name', success_criteria='Company name and job title are extracted from job description and added to file name and dashboard', user_message='I will identify company and job title from the job description and add both to the file name and dashboard.')
+
+add_plan_step(description='Enable deleting of entries from dashboard', success_criteria='Users can successfully delete entries from the dashboard', user_message='I will add the ability to delete entries from the dashboard.')
+
+add_plan_step(description='Allow users to edit the generated cover letter', success_criteria='Users can edit cover letters after generation', user_message='I will enable editing of generated cover letters.')
+
+add_plan_step(description='Add a safety check for submitted inputs (Focus, Resume, Job Description)', success_criteria='Safety checks verify that the inputs for Focus, Resume, and Job Description are valid', user_message='I will add a safety check to ensure all submitted inputs are correct.')
+
+add_plan_step(description='Create a Settings page with format instructions, account management, and delete account option', success_criteria='Users can adjust format instructions, edit account information, and delete their account', user_message='I will add a Settings page where users can adjust format instructions, confirm or edit account information, and delete their account.')
+
+add_plan_step(description='Improve dashboard functionality', success_criteria='Dashboard provides better user experience and more intuitive features', user_message='I will improve the dashboard.')
+
+add_plan_step(description='Add theme, colors, and a logo to the application', success_criteria='Application has a cohesive theme, custom colors, and a visible logo', user_message='I will add a theme, colors, and a logo to the application.')

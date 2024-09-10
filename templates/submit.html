@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Submit - AI Cover Letter Generator</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            display: none;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <nav class="bg-white shadow-md">
@@ -26,7 +42,7 @@
 
     <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <h2 class="text-2xl font-bold mb-4">Submit New Job</h2>
-        <form action="{{ url_for('submit') }}" method="post" enctype="multipart/form-data" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+        <form id="submitForm" action="{{ url_for('submit') }}" method="post" enctype="multipart/form-data" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
             <div class="mb-4">
                 <label class="block text-gray-700 text-sm font-bold mb-2" for="resume">
                     Upload Resume (PDF)
@@ -46,11 +62,20 @@
                 <textarea class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="job_description" name="job_description" rows="5" placeholder="Paste the job description here" required></textarea>
             </div>
             <div class="flex items-center justify-between">
-                <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit">
+                <button id="submitButton" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit">
                     Submit
                 </button>
             </div>
         </form>
+        <div id="loader" class="loader"></div>
     </main>
+
+    <script>
+        document.getElementById('submitForm').addEventListener('submit', function(e) {
+            document.getElementById('submitButton').disabled = true;
+            document.getElementById('submitButton').classList.add('opacity-50', 'cursor-not-allowed');
+            document.getElementById('loader').style.display = 'block';
+        });
+    </script>
 </body>
 </html>

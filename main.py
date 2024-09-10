@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, send_file
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,6 +9,8 @@ from openai import OpenAI
 from sqlalchemy import text
 from datetime import datetime, timedelta
 import logging
+import io
+from docx import Document
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -257,6 +259,30 @@ def result(submission_id):
         return redirect(url_for('view_submissions'))
     
     return render_template('result.html', submission=submission)
+
+@app.route('/download_cover_letter/<int:submission_id>')
+@login_required
+def download_cover_letter(submission_id):
+    submission = Submission.query.get_or_404(submission_id)
+    if submission.user_id != current_user.id:
+        logger.warning(f"User {current_user.id} attempted to download cover letter for submission {submission_id} without permission")
+        flash('You do not have permission to download this cover letter')
+        return redirect(url_for('view_submissions'))
+    
+    cover_letter_content = submission.cover_letter
+    doc = Document()
+    doc.add_paragraph(cover_letter_content)
+    
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=f'cover_letter_{submission_id}.docx',
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
 
 if __name__ == '__main__':
     with app.app_context():

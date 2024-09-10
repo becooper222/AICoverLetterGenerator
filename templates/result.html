@@ -5,48 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cover Letter Generation Result</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        @media print {
+            body {
+                width: 21cm;
+                height: 29.7cm;
+                margin: 30mm 45mm 30mm 45mm;
+            }
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+<body class="bg-gray-100 min-h-screen flex items-center justify-center py-12">
     <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-4xl">
-        <h1 class="text-2xl font-bold mb-6 text-center">Analysis Result</h1>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="bg-gray-50 p-4 rounded-md">
-                <h2 class="text-xl font-semibold mb-2">Input Summary</h2>
-                <pre class="whitespace-pre-wrap text-sm">{{ submission.focus_areas }}</pre>
-            </div>
-            <div class="bg-gray-50 p-4 rounded-md">
-                <h2 class="text-xl font-semibold mb-2">Cover Letter Suggestion</h2>
-                <div class="whitespace-pre-wrap text-sm" id="cover-letter-preview">{{ submission.cover_letter[:500] }}{% if submission.cover_letter|length > 500 %}...{% endif %}</div>
-                {% if submission.cover_letter|length > 500 %}
-                <button onclick="toggleFullCoverLetter()" class="mt-2 text-blue-500 hover:text-blue-700">View Full Cover Letter</button>
-                {% endif %}
+        <h1 class="text-3xl font-bold mb-6 text-center text-gray-800 no-print">Cover Letter Result</h1>
+        <div class="mb-6 no-print">
+            <h2 class="text-xl font-semibold mb-2 text-gray-700">Input Summary</h2>
+            <p class="text-sm text-gray-600"><strong>Focus Areas:</strong> {{ submission.focus_areas }}</p>
+        </div>
+        <div class="bg-gray-50 p-8 rounded-md mb-6 shadow-inner" id="cover-letter-content">
+            <div class="text-sm font-serif leading-relaxed text-gray-700">
+                <p class="text-right mb-4">{{ current_date }}</p>
+                <p class="font-bold text-lg mb-4">{{ current_user.first_name }} {{ current_user.last_name }}</p>
+                {% for paragraph in submission.cover_letter.split('\n\n') %}
+                    <p class="mb-4 indent-8">{{ paragraph | safe }}</p>
+                {% endfor %}
+                <p class="mt-8">Sincerely,</p>
+                <p class="mt-8 font-bold">{{ current_user.first_name }} {{ current_user.last_name }}</p>
             </div>
         </div>
-        <div class="hidden whitespace-pre-wrap text-sm" id="full-cover-letter">{{ submission.cover_letter }}</div>
-        <div class="mt-6 text-center space-x-4">
+        <div class="mt-6 text-center space-x-4 no-print">
             <a href="{{ url_for('dashboard') }}" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 inline-block">
                 Back to Dashboard
             </a>
             <a href="{{ url_for('download_cover_letter', submission_id=submission.id) }}" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 inline-block">
                 Download Cover Letter
             </a>
+            <button onclick="window.print()" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 inline-block">
+                Print Cover Letter
+            </button>
         </div>
     </div>
-    <script>
-    function toggleFullCoverLetter() {
-        const preview = document.getElementById('cover-letter-preview');
-        const full = document.getElementById('full-cover-letter');
-        const button = document.querySelector('button');
-        if (preview.classList.contains('hidden')) {
-            preview.classList.remove('hidden');
-            full.classList.add('hidden');
-            button.textContent = 'View Full Cover Letter';
-        } else {
-            preview.classList.add('hidden');
-            full.classList.remove('hidden');
-            button.textContent = 'Show Preview';
-        }
-    }
-    </script>
 </body>
 </html>

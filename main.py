@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import logging
 import io
 from docx import Document
+from templates.cover_letter_format import COVERLETTER_FORMAT
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -64,7 +65,7 @@ def load_user(user_id):
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def generate_cover_letter_suggestion(resume_text, focus_areas, job_description):
+def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, first_name, last_name):
     # Load the API key (already set in the environment)
     client = OpenAI(
         api_key=os.getenv('OPENAI_API_KEY')
@@ -72,17 +73,17 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description):
 
     # Prepare the full prompt
     static_prompt = "You are a professional cover letter writer."
-    coverletter_format = "Please write a professional cover letter that is tailored to the job description and highlights the candidate's relevant skills and experience."
 
     full_prompt = (
         f"{static_prompt}\n\n"
+        f"Candidate Name: {first_name} {last_name}\n\n"
         f"Job Description: {job_description}\n\n"
-        f"Cover Letter Format: {coverletter_format}\n\n"
+        f"Cover Letter Format: {COVERLETTER_FORMAT}\n\n"
         f"Focus: {focus_areas}\n\n"
         f"My Resume:\n{resume_text}\n\n"
         f"Things to avoid in the writing:\n"
         "Do not use the phrase 'as advertised'. Do not use the word 'tenure'\n\n"
-        "Please generate a cover letter that highlights my fit for this role and matches the format described in Cover Letter Format section."
+        "Please generate a cover letter that highlights my fit for this role, includes my name, and matches the format described in Cover Letter Format section."
     )
 
     # Call the ChatGPT API
@@ -225,7 +226,7 @@ def submit():
             job_description = request.form.get('job_description')
             
             logger.info("Generating cover letter suggestion")
-            cover_letter = generate_cover_letter_suggestion(resume_text, focus_areas, job_description)
+            cover_letter = generate_cover_letter_suggestion(resume_text, focus_areas, job_description, current_user.first_name, current_user.last_name)
             
             new_submission = Submission(
                 resume_text=resume_text,

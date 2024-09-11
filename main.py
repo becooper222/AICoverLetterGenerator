@@ -316,6 +316,32 @@ def download_cover_letter(submission_id):
         mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     )
 
+@app.route('/delete_submission/<int:submission_id>', methods=['POST'])
+@login_required
+def delete_submission(submission_id):
+    submission = Submission.query.get_or_404(submission_id)
+    if submission.user_id != current_user.id:
+        flash('You do not have permission to delete this submission')
+        return redirect(url_for('view_submissions'))
+    
+    db.session.delete(submission)
+    db.session.commit()
+    flash('Submission deleted successfully')
+    return redirect(url_for('view_submissions'))
+
+@app.route('/delete_resume/<int:resume_id>', methods=['POST'])
+@login_required
+def delete_resume(resume_id):
+    resume = Resume.query.get_or_404(resume_id)
+    if resume.user_id != current_user.id:
+        flash('You do not have permission to delete this resume')
+        return redirect(url_for('submit'))
+    
+    db.session.delete(resume)
+    db.session.commit()
+    flash('Resume deleted successfully')
+    return redirect(url_for('submit'))
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()

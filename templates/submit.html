@@ -44,10 +44,21 @@
         <h2 class="text-2xl font-bold mb-4">Submit New Job</h2>
         <form id="submitForm" action="{{ url_for('submit') }}" method="post" enctype="multipart/form-data" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
             <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="resume_selection">
+                    Select Resume
+                </label>
+                <select id="resume_selection" name="resume_selection" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+                    <option value="new">Upload a new resume</option>
+                    {% for resume in saved_resumes %}
+                    <option value="{{ resume.id }}">{{ resume.filename }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div id="new_resume_upload" class="mb-4">
                 <label class="block text-gray-700 text-sm font-bold mb-2" for="resume">
                     Upload Resume (PDF)
                 </label>
-                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="resume" name="resume" type="file" accept=".pdf" required>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="resume" name="resume" type="file" accept=".pdf">
             </div>
             <div class="mb-4">
                 <label class="block text-gray-700 text-sm font-bold mb-2" for="focus_areas">
@@ -75,6 +86,18 @@
             document.getElementById('submitButton').disabled = true;
             document.getElementById('submitButton').classList.add('opacity-50', 'cursor-not-allowed');
             document.getElementById('loader').style.display = 'block';
+        });
+
+        document.getElementById('resume_selection').addEventListener('change', function(e) {
+            var newResumeUpload = document.getElementById('new_resume_upload');
+            var resumeInput = document.getElementById('resume');
+            if (e.target.value === 'new') {
+                newResumeUpload.style.display = 'block';
+                resumeInput.required = true;
+            } else {
+                newResumeUpload.style.display = 'none';
+                resumeInput.required = false;
+            }
         });
     </script>
 </body>

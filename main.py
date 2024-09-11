@@ -42,6 +42,7 @@ class User(UserMixin, db.Model):
     last_name = db.Column(db.String(80), nullable=False)
     password_hash = db.Column(db.String(255))
     submissions = db.relationship('Submission', backref='user', lazy='dynamic')
+    resumes = db.relationship('Resume', backref='user', lazy='dynamic')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -55,6 +56,13 @@ class Submission(db.Model):
     focus_areas = db.Column(db.Text, nullable=False)
     job_description = db.Column(db.Text, nullable=False)
     cover_letter = db.Column(db.Text, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+class Resume(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(255), nullable=False)
+    content = db.Column(db.Text, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -202,53 +210,76 @@ def view_submissions():
 @login_required
 def submit():
     logger.info("Entering submit function")
+
     if request.method == 'POST':
         logger.info("Processing POST request for submission")
-        if 'resume' not in request.files:
-            logger.warning("No file part in the request")
-            flash('No file part')
-            return redirect(request.url)
-        file = request.files['resume']
+        resume_selection = request.form.get('resume_selection')
         
-        if file.filename == '':
-            logger.warning("No selected file")
-            flash('No selected file')
-            return redirect(request.url)
-        
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            logger.info(f"File saved: {filepath}")
-            
-            resume_text = extract_text_from_pdf(filepath)
-            focus_areas = request.form.get('focus_areas')
-            job_description = request.form.get('job_description')
-            
-            logger.info("Generating cover letter suggestion")
-            cover_letter = generate_cover_letter_suggestion(resume_text, focus_areas, job_description, current_user.first_name, current_user.last_name)
-            
-            new_submission = Submission(
-                resume_text=resume_text,
-                focus_areas=focus_areas,
-                job_description=job_description,
-                cover_letter=cover_letter,
-                user_id=current_user.id
-            )
-            db.session.add(new_submission)
-            db.session.commit()
-            logger.info(f"New submission created: {new_submission.id}")
-            
-            os.remove(filepath)
-            logger.info(f"Temporary file removed: {filepath}")
-            
-            return redirect(url_for('result', submission_id=new_submission.id))
+        if resume_selection and resume_selection != 'new':
+            # Use selected saved resume
+            resume = Resume.query.get(resume_selection)
+            if resume and resume.user_id == current_user.id:
+                resume_text = resume.content
+                filename = resume.filename
+            else:
+                flash('Invalid resume selection')
+                return redirect(request.url)
         else:
-            logger.warning("Invalid file type")
-            flash('Invalid file type. Please upload a PDF file.')
-            return redirect(request.url)
-    
-    return render_template('submit.html')
+            # Process new file upload
+            if 'resume' not in request.files:
+                logger.warning("No file part in the request")
+                flash('No file part')
+                return redirect(request.url)
+            file = request.files['resume']
+            
+            if file.filename == '':
+                logger.warning("No selected file")
+                flash('No selected file')
+                return redirect(request.url)
+            
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+                logger.info(f"File saved: {filepath}")
+                
+                resume_text = extract_text_from_pdf(filepath)
+                
+                # Save the new resume
+                new_resume = Resume(filename=filename, content=resume_text, user_id=current_user.id)
+                db.session.add(new_resume)
+                db.session.commit()
+                
+                os.remove(filepath)
+                logger.info(f"Temporary file removed: {filepath}")
+            else:
+                logger.warning("Invalid file type")
+                flash('Invalid file type. Please upload a PDF file.')
+                return redirect(request.url)
+
+        focus_areas = request.form.get('focus_areas')
+        job_description = request.form.get('job_description')
+
+        logger.info("Generating cover letter suggestion")
+        cover_letter = generate_cover_letter_suggestion(resume_text, focus_areas, job_description, current_user.first_name, current_user.last_name)
+
+        new_submission = Submission(
+            resume_text=resume_text,
+            focus_areas=focus_areas,
+            job_description=job_description,
+            cover_letter=cover_letter,
+            user_id=current_user.id
+        )
+        db.session.add(new_submission)
+        db.session.commit()
+        logger.info(f"New submission created: {new_submission.id}")
+
+        return redirect(url_for('result', submission_id=new_submission.id))
+
+    # GET request
+    saved_resumes = Resume.query.filter_by(user_id=current_user.id).order_by(Resume.created_at.desc()).all()
+    return render_template('submit.html', saved_resumes=saved_resumes)
+
 
 @app.route('/result/<int:submission_id>')
 @login_required

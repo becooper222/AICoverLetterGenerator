@@ -44,7 +44,7 @@
                                 <div>
                                     <a href="{{ url_for('result', submission_id=submission.id) }}" class="block hover:bg-gray-50">
                                         <p class="text-sm font-medium text-blue-600 truncate">
-                                            Submission #{{ submission.id }}
+                                            Submission #{{ loop.revindex }}
                                         </p>
                                         <p class="mt-1 text-sm text-gray-600">
                                             <strong>Company:</strong> {{ submission.company_name or 'N/A' }}

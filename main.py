@@ -100,7 +100,7 @@ def extract_company_and_job_title(job_description):
     """
 
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o-mini",
         messages=[{
             "role":
             "system",
@@ -150,7 +150,7 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description,
     )
 
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[{
             "role":
             "system",

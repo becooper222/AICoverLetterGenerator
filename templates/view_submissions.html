@@ -46,8 +46,14 @@
                                         <p class="text-sm font-medium text-blue-600 truncate">
                                             Submission #{{ submission.id }}
                                         </p>
+                                        <p class="mt-1 text-sm text-gray-600">
+                                            <strong>Company:</strong> {{ submission.company_name or 'N/A' }}
+                                        </p>
+                                        <p class="text-sm text-gray-600">
+                                            <strong>Job Title:</strong> {{ submission.job_title or 'N/A' }}
+                                        </p>
                                         <p class="mt-2 flex items-center text-sm text-gray-500">
-                                            {{ submission.focus_areas[:50] }}...
+                                            Focus Areas: {{ submission.focus_areas[:50] }}...
                                         </p>
                                         <p class="mt-2 flex items-center text-sm text-gray-500">
                                             {{ submission.created_at.strftime('%Y-%m-%d %H:%M:%S') }}

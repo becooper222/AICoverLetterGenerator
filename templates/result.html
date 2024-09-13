@@ -12,6 +12,9 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="bg-gray-50 p-4 rounded-md">
                 <h2 class="text-xl font-semibold mb-2">Input Summary</h2>
+                <p><strong>Company:</strong> {{ submission.company_name }}</p>
+                <p><strong>Job Title:</strong> {{ submission.job_title }}</p>
+                <p><strong>Focus Areas:</strong></p>
                 <pre class="whitespace-pre-wrap text-sm">{{ submission.focus_areas }}</pre>
             </div>
             <div class="bg-gray-50 p-4 rounded-md">

@@ -41,6 +41,7 @@ class User(UserMixin, db.Model):
     first_name = db.Column(db.String(80), nullable=False)
     last_name = db.Column(db.String(80), nullable=False)
     password_hash = db.Column(db.String(255))
+    ai_model = db.Column(db.String(20), default='gpt-3.5-turbo')  # New field for AI model selection
     submissions = db.relationship('Submission', backref='user', lazy='dynamic')
     resumes = db.relationship('Resume', backref='user', lazy='dynamic')
 
@@ -119,7 +120,7 @@ def extract_company_and_job_title(job_description):
 
     return company_name, job_title
 
-def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, first_name, last_name):
+def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, first_name, last_name, ai_model):
     client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
     company_name, job_title = extract_company_and_job_title(job_description)
@@ -141,7 +142,7 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=ai_model,
         messages=[{
             "role": "system",
             "content": "You are a helpful cover letter writing assistant."
@@ -257,7 +258,7 @@ def submit():
 
         logger.info("Generating cover letter suggestion")
         cover_letter, company_name, job_title = generate_cover_letter_suggestion(
-            resume_text, focus_areas, job_description, current_user.first_name, current_user.last_name)
+            resume_text, focus_areas, job_description, current_user.first_name, current_user.last_name, current_user.ai_model)
 
         logger.info(f"Extracted company name: {company_name}")
         logger.info(f"Extracted job title: {job_title}")
@@ -343,6 +344,7 @@ def settings():
         current_user.first_name = request.form.get('first_name')
         current_user.last_name = request.form.get('last_name')
         current_user.email = request.form.get('email')
+        current_user.ai_model = request.form.get('ai_model')
         
         current_password = request.form.get('current_password')
         new_password = request.form.get('new_password')
@@ -379,6 +381,7 @@ if __name__ == '__main__':
             with db.engine.connect() as conn:
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS first_name VARCHAR(80)'))
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_name VARCHAR(80)'))
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_model VARCHAR(20) DEFAULT \'gpt-3.5-turbo\''))
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'))
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)'))
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS job_title VARCHAR(255)'))

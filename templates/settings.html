@@ -60,6 +60,7 @@
                         AI Model
                     </label>
                     <select class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="ai_model" name="ai_model">
+                        <option value="gpt-4o-2024-08-06" {% if current_user.ai_model == 'gpt-4o-2024-08-06' %}selected{% endif %}>GPT-4o (2024-08-06)</option>
                         <option value="gpt-3.5-turbo" {% if current_user.ai_model == 'gpt-3.5-turbo' %}selected{% endif %}>GPT-3.5-turbo</option>
                         <option value="gpt-4" {% if current_user.ai_model == 'gpt-4' %}selected{% endif %}>GPT-4</option>
                         <option value="gpt-4-32k" {% if current_user.ai_model == 'gpt-4-32k' %}selected{% endif %}>GPT-4-32k</option>

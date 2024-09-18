@@ -41,7 +41,7 @@ class User(UserMixin, db.Model):
     first_name = db.Column(db.String(80), nullable=False)
     last_name = db.Column(db.String(80), nullable=False)
     password_hash = db.Column(db.String(255))
-    ai_model = db.Column(db.String(20), default='gpt-3.5-turbo')  # New field for AI model selection
+    ai_model = db.Column(db.String(20), default='gpt-4o-2024-08-06')  # New field for AI model selection
     submissions = db.relationship('Submission', backref='user', lazy='dynamic')
     resumes = db.relationship('Resume', backref='user', lazy='dynamic')
 

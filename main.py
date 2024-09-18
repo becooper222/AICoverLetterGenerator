@@ -1,9 +1,9 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, send_file
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-import os
 from utils.pdf_processor import extract_text_from_pdf
 from openai import OpenAI
 from sqlalchemy import text
@@ -12,6 +12,8 @@ import logging
 import io
 from docx import Document
 from templates.cover_letter_format import COVERLETTER_FORMAT
+import secrets
+from flask_mail import Mail, Message
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -28,6 +30,14 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# Mail configuration
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+mail = Mail(app)
+
 ALLOWED_EXTENSIONS = {'pdf'}
 
 # Configure logging
@@ -41,7 +51,9 @@ class User(UserMixin, db.Model):
     first_name = db.Column(db.String(80), nullable=False)
     last_name = db.Column(db.String(80), nullable=False)
     password_hash = db.Column(db.String(255))
-    ai_model = db.Column(db.String(20), default='gpt-4o-2024-08-06')  # New field for AI model selection
+    ai_model = db.Column(db.String(20), default='gpt-4o-2024-08-06')
+    reset_token = db.Column(db.String(100), unique=True)
+    reset_token_expiration = db.Column(db.DateTime)
     submissions = db.relationship('Submission', backref='user', lazy='dynamic')
     resumes = db.relationship('Resume', backref='user', lazy='dynamic')
 
@@ -56,6 +68,16 @@ class User(UserMixin, db.Model):
         Resume.query.filter_by(user_id=self.id).delete()
         db.session.delete(self)
         db.session.commit()
+
+    def generate_reset_token(self):
+        self.reset_token = secrets.token_urlsafe(32)
+        self.reset_token_expiration = datetime.utcnow() + timedelta(hours=1)
+        db.session.commit()
+
+    def verify_reset_token(self, token):
+        if token != self.reset_token or self.reset_token_expiration < datetime.utcnow():
+            return False
+        return True
 
 class Submission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -374,6 +396,47 @@ def delete_account():
     flash('Your account has been deleted', 'success')
     return redirect(url_for('index'))
 
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        user = User.query.filter_by(email=email).first()
+        if user:
+            user.generate_reset_token()
+            reset_link = url_for('reset_password', token=user.reset_token, _external=True)
+            msg = Message('Password Reset Request',
+                          sender='noreply@example.com',
+                          recipients=[user.email])
+            msg.body = f'To reset your password, visit the following link: {reset_link}'
+            mail.send(msg)
+            flash('An email has been sent with instructions to reset your password.', 'info')
+        else:
+            flash('Email address not found.', 'error')
+        return redirect(url_for('login'))
+    return render_template('forgot_password.html')
+
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    user = User.query.filter_by(reset_token=token).first()
+    if not user or not user.verify_reset_token(token):
+        flash('Invalid or expired reset token.', 'error')
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        if new_password == confirm_password:
+            user.set_password(new_password)
+            user.reset_token = None
+            user.reset_token_expiration = None
+            db.session.commit()
+            flash('Your password has been reset successfully.', 'success')
+            return redirect(url_for('login'))
+        else:
+            flash('Passwords do not match.', 'error')
+    
+    return render_template('reset_password.html', token=token)
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
@@ -382,6 +445,8 @@ if __name__ == '__main__':
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS first_name VARCHAR(80)'))
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_name VARCHAR(80)'))
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_model VARCHAR(20) DEFAULT \'gpt-3.5-turbo\''))
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100)'))
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token_expiration TIMESTAMP'))
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'))
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)'))
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS job_title VARCHAR(255)'))

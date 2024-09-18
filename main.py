@@ -36,6 +36,7 @@ app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')
 mail = Mail(app)
 
 ALLOWED_EXTENSIONS = {'pdf'}
@@ -405,7 +406,7 @@ def forgot_password():
             user.generate_reset_token()
             reset_link = url_for('reset_password', token=user.reset_token, _external=True)
             msg = Message('Password Reset Request',
-                          sender='noreply@example.com',
+                          sender=app.config['MAIL_DEFAULT_SENDER'],
                           recipients=[user.email])
             msg.body = f'To reset your password, visit the following link: {reset_link}'
             mail.send(msg)

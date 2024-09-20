@@ -55,6 +55,7 @@ class User(UserMixin, db.Model):
     ai_model = db.Column(db.String(20), default='gpt-4o-2024-08-06')
     reset_token = db.Column(db.String(100), unique=True)
     reset_token_expiration = db.Column(db.DateTime)
+    cover_letter_format = db.Column(db.Text, default=COVERLETTER_FORMAT)
     submissions = db.relationship('Submission', backref='user', lazy='dynamic')
     resumes = db.relationship('Resume', backref='user', lazy='dynamic')
 
@@ -143,7 +144,7 @@ def extract_company_and_job_title(job_description):
 
     return company_name, job_title
 
-def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, first_name, last_name, ai_model):
+def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, first_name, last_name, ai_model, cover_letter_format):
     client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
     company_name, job_title = extract_company_and_job_title(job_description)
@@ -156,7 +157,7 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
         f"Company: {company_name}\n"
         f"Job Title: {job_title}\n\n"
         f"Job Description: {job_description}\n\n"
-        f"Cover Letter Format: {COVERLETTER_FORMAT}\n\n"
+        f"Cover Letter Format: {cover_letter_format}\n\n"
         f"Focus: {focus_areas}\n\n"
         f"My Resume:\n{resume_text}\n\n"
         f"Things to avoid in the writing:\n"
@@ -281,7 +282,7 @@ def submit():
 
         logger.info("Generating cover letter suggestion")
         cover_letter, company_name, job_title = generate_cover_letter_suggestion(
-            resume_text, focus_areas, job_description, current_user.first_name, current_user.last_name, current_user.ai_model)
+            resume_text, focus_areas, job_description, current_user.first_name, current_user.last_name, current_user.ai_model, current_user.cover_letter_format)
 
         logger.info(f"Extracted company name: {company_name}")
         logger.info(f"Extracted job title: {job_title}")
@@ -368,6 +369,7 @@ def settings():
         current_user.last_name = request.form.get('last_name')
         current_user.email = request.form.get('email')
         current_user.ai_model = request.form.get('ai_model')
+        current_user.cover_letter_format = request.form.get('cover_letter_format')
         
         current_password = request.form.get('current_password')
         new_password = request.form.get('new_password')
@@ -448,6 +450,7 @@ if __name__ == '__main__':
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_model VARCHAR(20) DEFAULT \'gpt-3.5-turbo\''))
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100)'))
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token_expiration TIMESTAMP'))
+                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS cover_letter_format TEXT'))
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'))
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)'))
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS job_title VARCHAR(255)'))

@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 COVERLETTER_FORMAT = (
     "On the first line (line 1) include the candidate name and nothing else. On the next line (line 2), "
-    f"put [current date]. Skip a line (line 3). On the next line (line 4), "
+    "put [current date]. Skip a line (line 3). On the next line (line 4), "
     "put \"Dear Hiring Manager,\", or if the name of the hiring manager's name is present in the job description, put \"Dear "
     "[Hiring Manager Name],\". Skip a line (line 5). Start the body of the cover letter. Write three, four, or five paragraphs, "
     "with empty lines in between each, that combine to reach the bottom of a word doc minus 3 lines. Skip a line (line end-3). On the next "
@@ -155,11 +155,14 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
 
     company_name, job_title = extract_company_and_job_title(job_description)
 
+    current_date = date.today().strftime("%B %d, %Y")
+
     static_prompt = "You are a professional cover letter writer."
 
     full_prompt = (
         f"{static_prompt}\n\n"
         f"Candidate Name: {first_name} {last_name}\n\n"
+        f"Current Date: {current_date}\n\n"
         f"Company: {company_name}\n"
         f"Job Title: {job_title}\n\n"
         f"Job Description: {job_description}\n\n"
@@ -168,7 +171,7 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
         f"My Resume:\n{resume_text}\n\n"
         f"Things to avoid in the writing:\n"
         "Do not use the phrase 'as advertised'. Do not use the word 'tenure'\n\n"
-        "Please generate a cover letter that highlights my fit for this role, includes my name, and matches the format described in Cover Letter Format section."
+        f"Please generate a cover letter that highlights my fit for this role, includes my name, the current date ({current_date}), and matches the format described in Cover Letter Format section."
     )
 
     response = client.chat.completions.create(

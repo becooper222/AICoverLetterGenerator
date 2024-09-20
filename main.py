@@ -7,11 +7,10 @@ from werkzeug.utils import secure_filename
 from utils.pdf_processor import extract_text_from_pdf
 from openai import OpenAI
 from sqlalchemy import text
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import logging
 import io
 from docx import Document
-from templates.cover_letter_format import COVERLETTER_FORMAT
 import secrets
 from flask_mail import Mail, Message
 
@@ -40,6 +39,15 @@ ALLOWED_EXTENSIONS = {'pdf'}
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+COVERLETTER_FORMAT = (
+    "On the first line (line 1) include the candidate name and nothing else. On the next line (line 2), "
+    f"put {date.today().strftime('%B %d, %Y')}. Skip a line (line 3). On the next line (line 4), "
+    "put \"Dear Hiring Manager,\", or if the name of the hiring manager's name is present in the job description, put \"Dear "
+    "[Hiring Manager Name],\". Skip a line (line 5). Start the body of the cover letter. Write three, four, or five paragraphs, "
+    "with empty lines in between each, that combine to reach the bottom of a word doc minus 3 lines. Skip a line (line -3). On the next "
+    "line put, \"Sincerely,\" (line -2). On the final line (line -1), put the candidate name"
+)
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -453,4 +461,14 @@ if __name__ == '__main__':
                 conn.commit()
         except Exception as e:
             logger.error(f'Error updating database schema: {e}')
+        
+        try:
+            users = User.query.all()
+            for user in users:
+                user.cover_letter_format = COVERLETTER_FORMAT
+            db.session.commit()
+            print("Updated cover letter format for all users")
+        except Exception as e:
+            print(f"Error updating cover letter format: {e}")
+    
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -20,17 +20,14 @@ app.secret_key = os.urandom(24)
 app.config['UPLOAD_FOLDER'] = '/tmp'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
-# Database configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# Login manager configuration
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# Mail configuration
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
@@ -41,7 +38,6 @@ mail = Mail(app)
 
 ALLOWED_EXTENSIONS = {'pdf'}
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -196,7 +192,7 @@ def register():
             flash('Username already exists')
             return redirect(url_for('register'))
 
-        new_user = User(username=username, email=email, first_name=first_name, last_name=last_name)
+        new_user = User(username=username, email=email, first_name=first_name, last_name=last_name, cover_letter_format=COVERLETTER_FORMAT)
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()

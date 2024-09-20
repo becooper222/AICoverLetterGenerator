@@ -42,12 +42,13 @@ logger = logging.getLogger(__name__)
 
 COVERLETTER_FORMAT = (
     "On the first line (line 1) include the candidate name and nothing else. On the next line (line 2), "
-    f"put {date.today().strftime('%B %d, %Y')}. Skip a line (line 3). On the next line (line 4), "
+    f"put [current date]. Skip a line (line 3). On the next line (line 4), "
     "put \"Dear Hiring Manager,\", or if the name of the hiring manager's name is present in the job description, put \"Dear "
     "[Hiring Manager Name],\". Skip a line (line 5). Start the body of the cover letter. Write three, four, or five paragraphs, "
-    "with empty lines in between each, that combine to reach the bottom of a word doc minus 3 lines. Skip a line (line -3). On the next "
-    "line put, \"Sincerely,\" (line -2). On the final line (line -1), put the candidate name"
+    "with empty lines in between each, that combine to reach the bottom of a word doc minus 3 lines. Skip a line (line end-3). On the next "
+    "line put, \"Sincerely,\" (line end-2). On the final line (line end-1), put the candidate name"
 )
+
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -81,9 +82,11 @@ class User(UserMixin, db.Model):
         db.session.commit()
 
     def verify_reset_token(self, token):
-        if token != self.reset_token or self.reset_token_expiration < datetime.utcnow():
+        if token != self.reset_token or self.reset_token_expiration < datetime.utcnow(
+        ):
             return False
         return True
+
 
 class Submission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -94,21 +97,30 @@ class Submission(db.Model):
     company_name = db.Column(db.String(255))
     job_title = db.Column(db.String(255))
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime,
+                           nullable=False,
+                           default=datetime.utcnow)
+
 
 class Resume(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)
     content = db.Column(db.Text, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime,
+                           nullable=False,
+                           default=datetime.utcnow)
+
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit(
+        '.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 def extract_company_and_job_title(job_description):
     client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
@@ -126,8 +138,10 @@ def extract_company_and_job_title(job_description):
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{
-            "role": "system",
-            "content": "You are a helpful assistant that extracts company names and job titles from job descriptions."
+            "role":
+            "system",
+            "content":
+            "You are a helpful assistant that extracts company names and job titles from job descriptions."
         }, {
             "role": "user",
             "content": prompt
@@ -148,7 +162,10 @@ def extract_company_and_job_title(job_description):
 
     return company_name, job_title
 
-def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, first_name, last_name, ai_model, cover_letter_format):
+
+def generate_cover_letter_suggestion(resume_text, focus_areas, job_description,
+                                     first_name, last_name, ai_model,
+                                     cover_letter_format):
     client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
     company_name, job_title = extract_company_and_job_title(job_description)
@@ -172,8 +189,10 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
     response = client.chat.completions.create(
         model=ai_model,
         messages=[{
-            "role": "system",
-            "content": "You are a helpful cover letter writing assistant."
+            "role":
+            "system",
+            "content":
+            "You are a helpful cover letter writing assistant."
         }, {
             "role": "user",
             "content": full_prompt
@@ -182,9 +201,11 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
     cover_letter = response.choices[0].message.content
     return cover_letter, company_name, job_title
 
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -200,7 +221,11 @@ def register():
             flash('Username already exists')
             return redirect(url_for('register'))
 
-        new_user = User(username=username, email=email, first_name=first_name, last_name=last_name, cover_letter_format=COVERLETTER_FORMAT)
+        new_user = User(username=username,
+                        email=email,
+                        first_name=first_name,
+                        last_name=last_name,
+                        cover_letter_format=COVERLETTER_FORMAT)
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()
@@ -208,6 +233,7 @@ def register():
         return redirect(url_for('login'))
 
     return render_template('register.html')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -222,16 +248,19 @@ def login():
             flash('Invalid username or password')
     return render_template('login.html')
 
+
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
     return redirect(url_for('index'))
 
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
     return render_template('dashboard.html')
+
 
 @app.route('/submit', methods=['GET', 'POST'])
 @login_required
@@ -270,7 +299,9 @@ def submit():
 
                 resume_text = extract_text_from_pdf(filepath)
 
-                new_resume = Resume(filename=filename, content=resume_text, user_id=current_user.id)
+                new_resume = Resume(filename=filename,
+                                    content=resume_text,
+                                    user_id=current_user.id)
                 db.session.add(new_resume)
                 db.session.commit()
 
@@ -286,7 +317,9 @@ def submit():
 
         logger.info("Generating cover letter suggestion")
         cover_letter, company_name, job_title = generate_cover_letter_suggestion(
-            resume_text, focus_areas, job_description, current_user.first_name, current_user.last_name, current_user.ai_model, current_user.cover_letter_format)
+            resume_text, focus_areas, job_description, current_user.first_name,
+            current_user.last_name, current_user.ai_model,
+            current_user.cover_letter_format)
 
         logger.info(f"Extracted company name: {company_name}")
         logger.info(f"Extracted job title: {job_title}")
@@ -304,8 +337,10 @@ def submit():
 
         return redirect(url_for('result', submission_id=new_submission.id))
 
-    saved_resumes = Resume.query.filter_by(user_id=current_user.id).order_by(Resume.created_at.desc()).all()
+    saved_resumes = Resume.query.filter_by(user_id=current_user.id).order_by(
+        Resume.created_at.desc()).all()
     return render_template('submit.html', saved_resumes=saved_resumes)
+
 
 @app.route('/result/<int:submission_id>')
 @login_required
@@ -316,33 +351,48 @@ def result(submission_id):
         return redirect(url_for('dashboard'))
     return render_template('result.html', submission=submission)
 
+
 @app.route('/view_submissions')
 @login_required
 def view_submissions():
-    submissions = Submission.query.filter_by(user_id=current_user.id).order_by(Submission.created_at.desc()).all()
+    submissions = Submission.query.filter_by(user_id=current_user.id).order_by(
+        Submission.created_at.desc()).all()
     return render_template('view_submissions.html', submissions=submissions)
+
 
 @app.route('/delete_submission/<int:submission_id>', methods=['POST'])
 @login_required
 def delete_submission(submission_id):
     submission = Submission.query.get_or_404(submission_id)
     if submission.user_id != current_user.id:
-        return jsonify({'success': False, 'message': 'You do not have permission to delete this submission.'}), 403
+        return jsonify({
+            'success':
+            False,
+            'message':
+            'You do not have permission to delete this submission.'
+        }), 403
 
     db.session.delete(submission)
     db.session.commit()
     return jsonify({'success': True})
+
 
 @app.route('/delete_resume/<int:resume_id>', methods=['POST'])
 @login_required
 def delete_resume(resume_id):
     resume = Resume.query.get_or_404(resume_id)
     if resume.user_id != current_user.id:
-        return jsonify({'success': False, 'message': 'You do not have permission to delete this resume.'}), 403
+        return jsonify({
+            'success':
+            False,
+            'message':
+            'You do not have permission to delete this resume.'
+        }), 403
 
     db.session.delete(resume)
     db.session.commit()
     return jsonify({'success': True})
+
 
 @app.route('/download_cover_letter/<int:submission_id>')
 @login_required
@@ -361,9 +411,12 @@ def download_cover_letter(submission_id):
 
     return send_file(
         doc_io,
-        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        mimetype=
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         as_attachment=True,
-        download_name=f"cover_letter_{submission.company_name}_{submission.job_title}.docx")
+        download_name=
+        f"cover_letter_{submission.company_name}_{submission.job_title}.docx")
+
 
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
@@ -373,12 +426,13 @@ def settings():
         current_user.last_name = request.form.get('last_name')
         current_user.email = request.form.get('email')
         current_user.ai_model = request.form.get('ai_model')
-        current_user.cover_letter_format = request.form.get('cover_letter_format')
-        
+        current_user.cover_letter_format = request.form.get(
+            'cover_letter_format')
+
         current_password = request.form.get('current_password')
         new_password = request.form.get('new_password')
         confirm_password = request.form.get('confirm_password')
-        
+
         if current_password and new_password and confirm_password:
             if current_user.check_password(current_password):
                 if new_password == confirm_password:
@@ -388,12 +442,13 @@ def settings():
                     flash('New passwords do not match', 'error')
             else:
                 flash('Current password is incorrect', 'error')
-        
+
         db.session.commit()
         flash('Settings updated successfully', 'success')
         return redirect(url_for('settings'))
-    
+
     return render_template('settings.html')
+
 
 @app.route('/delete_account', methods=['POST'])
 @login_required
@@ -403,6 +458,7 @@ def delete_account():
     flash('Your account has been deleted', 'success')
     return redirect(url_for('index'))
 
+
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'POST':
@@ -410,17 +466,22 @@ def forgot_password():
         user = User.query.filter_by(email=email).first()
         if user:
             user.generate_reset_token()
-            reset_link = url_for('reset_password', token=user.reset_token, _external=True)
+            reset_link = url_for('reset_password',
+                                 token=user.reset_token,
+                                 _external=True)
             msg = Message('Password Reset Request',
                           sender=app.config['MAIL_DEFAULT_SENDER'],
                           recipients=[user.email])
             msg.body = f'To reset your password, visit the following link: {reset_link}'
             mail.send(msg)
-            flash('An email has been sent with instructions to reset your password.', 'info')
+            flash(
+                'An email has been sent with instructions to reset your password.',
+                'info')
         else:
             flash('Email address not found.', 'error')
         return redirect(url_for('login'))
     return render_template('forgot_password.html')
+
 
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
@@ -428,7 +489,7 @@ def reset_password(token):
     if not user or not user.verify_reset_token(token):
         flash('Invalid or expired reset token.', 'error')
         return redirect(url_for('login'))
-    
+
     if request.method == 'POST':
         new_password = request.form.get('new_password')
         confirm_password = request.form.get('confirm_password')
@@ -441,34 +502,53 @@ def reset_password(token):
             return redirect(url_for('login'))
         else:
             flash('Passwords do not match.', 'error')
-    
+
     return render_template('reset_password.html', token=token)
+
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         try:
             with db.engine.connect() as conn:
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS first_name VARCHAR(80)'))
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_name VARCHAR(80)'))
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_model VARCHAR(20) DEFAULT \'gpt-3.5-turbo\''))
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100)'))
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token_expiration TIMESTAMP'))
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS cover_letter_format TEXT'))
-                conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'))
-                conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)'))
-                conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS job_title VARCHAR(255)'))
+                conn.execute(
+                    text(
+                        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS first_name VARCHAR(80)'
+                    ))
+                conn.execute(
+                    text(
+                        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_name VARCHAR(80)'
+                    ))
+                conn.execute(
+                    text(
+                        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_model VARCHAR(20) DEFAULT \'gpt-3.5-turbo\''
+                    ))
+                conn.execute(
+                    text(
+                        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100)'
+                    ))
+                conn.execute(
+                    text(
+                        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token_expiration TIMESTAMP'
+                    ))
+                conn.execute(
+                    text(
+                        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS cover_letter_format TEXT'
+                    ))
+                conn.execute(
+                    text(
+                        'ALTER TABLE submission ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
+                    ))
+                conn.execute(
+                    text(
+                        'ALTER TABLE submission ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)'
+                    ))
+                conn.execute(
+                    text(
+                        'ALTER TABLE submission ADD COLUMN IF NOT EXISTS job_title VARCHAR(255)'
+                    ))
                 conn.commit()
         except Exception as e:
             logger.error(f'Error updating database schema: {e}')
-        
-        try:
-            users = User.query.all()
-            for user in users:
-                user.cover_letter_format = COVERLETTER_FORMAT
-            db.session.commit()
-            print("Updated cover letter format for all users")
-        except Exception as e:
-            print(f"Error updating cover letter format: {e}")
-    
+
     app.run(host='0.0.0.0', port=5000, debug=True)

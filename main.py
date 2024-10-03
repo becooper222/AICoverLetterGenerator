@@ -6,7 +6,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from utils.pdf_processor import extract_text_from_pdf
 from openai import OpenAI
-from sqlalchemy import text
+from sqlalchemy import text, create_engine
+from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime, timedelta, date
 import logging
 import io
@@ -23,6 +24,11 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 10,
+    'pool_recycle': 3600,
+    'pool_pre_ping': True
+}
 db = SQLAlchemy(app)
 
 login_manager = LoginManager()
@@ -187,6 +193,11 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
     cover_letter = response.choices[0].message.content
     return cover_letter, company_name, job_title
 
+def handle_db_error(e):
+    logging.error(f"Database error: {str(e)}")
+    db.session.rollback()
+    flash("An error occurred. Please try again.", "error")
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -200,17 +211,20 @@ def register():
         first_name = request.form.get('first_name')
         last_name = request.form.get('last_name')
 
-        user = User.query.filter_by(username=username).first()
-        if user:
-            flash('Username already exists')
+        try:
+            user = User.query.filter_by(username=username).first()
+            if user:
+                flash('Username already exists')
+                return redirect(url_for('register'))
+
+            new_user = User(username=username, email=email, first_name=first_name, last_name=last_name, cover_letter_format=COVERLETTER_FORMAT)
+            new_user.set_password(password)
+            db.session.add(new_user)
+            db.session.commit()
+            return redirect(url_for('login'))
+        except SQLAlchemyError as e:
+            handle_db_error(e)
             return redirect(url_for('register'))
-
-        new_user = User(username=username, email=email, first_name=first_name, last_name=last_name, cover_letter_format=COVERLETTER_FORMAT)
-        new_user.set_password(password)
-        db.session.add(new_user)
-        db.session.commit()
-
-        return redirect(url_for('login'))
 
     return render_template('register.html')
 
@@ -247,69 +261,73 @@ def submit():
         logger.info("Processing POST request for submission")
         resume_selection = request.form.get('resume_selection')
 
-        if resume_selection and resume_selection != 'new':
-            resume = Resume.query.get(resume_selection)
-            if resume and resume.user_id == current_user.id:
-                resume_text = resume.content
-                filename = resume.filename
+        try:
+            if resume_selection and resume_selection != 'new':
+                resume = Resume.query.get(resume_selection)
+                if resume and resume.user_id == current_user.id:
+                    resume_text = resume.content
+                    filename = resume.filename
+                else:
+                    flash('Invalid resume selection')
+                    return redirect(request.url)
             else:
-                flash('Invalid resume selection')
-                return redirect(request.url)
-        else:
-            if 'resume' not in request.files:
-                logger.warning("No file part in the request")
-                flash('No file part')
-                return redirect(request.url)
-            file = request.files['resume']
+                if 'resume' not in request.files:
+                    logger.warning("No file part in the request")
+                    flash('No file part')
+                    return redirect(request.url)
+                file = request.files['resume']
 
-            if file.filename == '':
-                logger.warning("No selected file")
-                flash('No selected file')
-                return redirect(request.url)
+                if file.filename == '':
+                    logger.warning("No selected file")
+                    flash('No selected file')
+                    return redirect(request.url)
 
-            if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(filepath)
-                logger.info(f"File saved: {filepath}")
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    logger.info(f"File saved: {filepath}")
 
-                resume_text = extract_text_from_pdf(filepath)
+                    resume_text = extract_text_from_pdf(filepath)
 
-                new_resume = Resume(filename=filename, content=resume_text, user_id=current_user.id)
-                db.session.add(new_resume)
-                db.session.commit()
+                    new_resume = Resume(filename=filename, content=resume_text, user_id=current_user.id)
+                    db.session.add(new_resume)
+                    db.session.commit()
 
-                os.remove(filepath)
-                logger.info(f"Temporary file removed: {filepath}")
-            else:
-                logger.warning("Invalid file type")
-                flash('Invalid file type. Please upload a PDF file.')
-                return redirect(request.url)
+                    os.remove(filepath)
+                    logger.info(f"Temporary file removed: {filepath}")
+                else:
+                    logger.warning("Invalid file type")
+                    flash('Invalid file type. Please upload a PDF file.')
+                    return redirect(request.url)
 
-        focus_areas = request.form.get('focus_areas')
-        job_description = request.form.get('job_description')
+            focus_areas = request.form.get('focus_areas')
+            job_description = request.form.get('job_description')
 
-        logger.info("Generating cover letter suggestion")
-        cover_letter, company_name, job_title = generate_cover_letter_suggestion(
-            resume_text, focus_areas, job_description, current_user.first_name,
-            current_user.last_name, current_user.ai_model,
-            current_user.cover_letter_format)
+            logger.info("Generating cover letter suggestion")
+            cover_letter, company_name, job_title = generate_cover_letter_suggestion(
+                resume_text, focus_areas, job_description, current_user.first_name,
+                current_user.last_name, current_user.ai_model,
+                current_user.cover_letter_format)
 
-        logger.info(f"Extracted company name: {company_name}")
-        logger.info(f"Extracted job title: {job_title}")
+            logger.info(f"Extracted company name: {company_name}")
+            logger.info(f"Extracted job title: {job_title}")
 
-        new_submission = Submission(resume_text=resume_text,
-                                    focus_areas=focus_areas,
-                                    job_description=job_description,
-                                    cover_letter=cover_letter,
-                                    company_name=company_name,
-                                    job_title=job_title,
-                                    user_id=current_user.id)
-        db.session.add(new_submission)
-        db.session.commit()
-        logger.info(f"New submission created: {new_submission.id}")
+            new_submission = Submission(resume_text=resume_text,
+                                        focus_areas=focus_areas,
+                                        job_description=job_description,
+                                        cover_letter=cover_letter,
+                                        company_name=company_name,
+                                        job_title=job_title,
+                                        user_id=current_user.id)
+            db.session.add(new_submission)
+            db.session.commit()
+            logger.info(f"New submission created: {new_submission.id}")
 
-        return redirect(url_for('result', submission_id=new_submission.id))
+            return redirect(url_for('result', submission_id=new_submission.id))
+        except SQLAlchemyError as e:
+            handle_db_error(e)
+            return redirect(request.url)
 
     saved_resumes = Resume.query.filter_by(user_id=current_user.id).order_by(Resume.created_at.desc()).all()
     return render_template('submit.html', saved_resumes=saved_resumes)
@@ -332,13 +350,17 @@ def view_submissions():
 @app.route('/delete_submission/<int:submission_id>', methods=['POST'])
 @login_required
 def delete_submission(submission_id):
-    submission = Submission.query.get_or_404(submission_id)
-    if submission.user_id != current_user.id:
-        return jsonify({'success': False, 'message': 'You do not have permission to delete this submission.'}), 403
+    try:
+        submission = Submission.query.get_or_404(submission_id)
+        if submission.user_id != current_user.id:
+            return jsonify({'success': False, 'message': 'You do not have permission to delete this submission.'}), 403
 
-    db.session.delete(submission)
-    db.session.commit()
-    return jsonify({'success': True})
+        db.session.delete(submission)
+        db.session.commit()
+        return jsonify({'success': True})
+    except SQLAlchemyError as e:
+        handle_db_error(e)
+        return jsonify({'success': False, 'message': 'An error occurred while deleting the submission.'}), 500
 
 @app.route('/delete_resume/<int:resume_id>', methods=['POST'])
 @login_required
@@ -361,13 +383,11 @@ def download_cover_letter(submission_id):
 
     document = Document()
     
-    # Set the default font to Times New Roman and size to 12pt
     style = document.styles['Normal']
     font = style.font
     font.name = 'Times New Roman'
     font.size = Pt(12)
 
-    # Add the cover letter content
     document.add_paragraph(submission.cover_letter)
 
     doc_io = io.BytesIO()
@@ -384,28 +404,31 @@ def download_cover_letter(submission_id):
 @login_required
 def settings():
     if request.method == 'POST':
-        current_user.first_name = request.form.get('first_name')
-        current_user.last_name = request.form.get('last_name')
-        current_user.email = request.form.get('email')
-        current_user.ai_model = request.form.get('ai_model')
-        current_user.cover_letter_format = request.form.get('cover_letter_format')
+        try:
+            current_user.first_name = request.form.get('first_name')
+            current_user.last_name = request.form.get('last_name')
+            current_user.email = request.form.get('email')
+            current_user.ai_model = request.form.get('ai_model')
+            current_user.cover_letter_format = request.form.get('cover_letter_format')
 
-        current_password = request.form.get('current_password')
-        new_password = request.form.get('new_password')
-        confirm_password = request.form.get('confirm_password')
+            current_password = request.form.get('current_password')
+            new_password = request.form.get('new_password')
+            confirm_password = request.form.get('confirm_password')
 
-        if current_password and new_password and confirm_password:
-            if current_user.check_password(current_password):
-                if new_password == confirm_password:
-                    current_user.set_password(new_password)
-                    flash('Password updated successfully', 'success')
+            if current_password and new_password and confirm_password:
+                if current_user.check_password(current_password):
+                    if new_password == confirm_password:
+                        current_user.set_password(new_password)
+                        flash('Password updated successfully', 'success')
+                    else:
+                        flash('New passwords do not match', 'error')
                 else:
-                    flash('New passwords do not match', 'error')
-            else:
-                flash('Current password is incorrect', 'error')
+                    flash('Current password is incorrect', 'error')
 
-        db.session.commit()
-        flash('Settings updated successfully', 'success')
+            db.session.commit()
+            flash('Settings updated successfully', 'success')
+        except SQLAlchemyError as e:
+            handle_db_error(e)
         return redirect(url_for('settings'))
 
     return render_template('settings.html')
@@ -459,8 +482,8 @@ def reset_password(token):
 
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
         try:
+            db.create_all()
             with db.engine.connect() as conn:
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS first_name VARCHAR(80)'))
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_name VARCHAR(80)'))
@@ -472,7 +495,7 @@ if __name__ == '__main__':
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)'))
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS job_title VARCHAR(255)'))
                 conn.commit()
-        except Exception as e:
-            logger.error(f'Error updating database schema: {e}')
+        except SQLAlchemyError as e:
+            handle_db_error(e)
 
     app.run(host='0.0.0.0', port=5000, debug=True)

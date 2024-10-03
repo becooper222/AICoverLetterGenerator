@@ -1,4 +1,5 @@
 import os
+import time
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, send_file
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_sqlalchemy import SQLAlchemy
@@ -7,7 +8,7 @@ from werkzeug.utils import secure_filename
 from utils.pdf_processor import extract_text_from_pdf
 from openai import OpenAI
 from sqlalchemy import text, create_engine
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from datetime import datetime, timedelta, date
 import logging
 import io
@@ -17,18 +18,23 @@ from docx.enum.style import WD_STYLE_TYPE
 import secrets
 from flask_mail import Mail, Message
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 app.config['UPLOAD_FOLDER'] = '/tmp'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_size': 10,
     'pool_recycle': 3600,
-    'pool_pre_ping': True
+    'pool_pre_ping': True,
+    'pool_timeout': 30,
 }
+
 db = SQLAlchemy(app)
 
 login_manager = LoginManager()
@@ -45,9 +51,6 @@ mail = Mail(app)
 
 ALLOWED_EXTENSIONS = {'pdf'}
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 COVERLETTER_FORMAT = (
     "On the first line (line 1) include the candidate name and nothing else. On the next line (line 2), "
     "put [current date]. Skip a line (line 3). On the next line (line 4), "
@@ -56,6 +59,21 @@ COVERLETTER_FORMAT = (
     "with empty lines in between each, that combine to reach the bottom of a word doc minus 3 lines. Skip a line (line end-3). On the next "
     "line put, \"Sincerely,\" (line end-2). On the final line (line end-1), put the candidate name"
 )
+
+max_retries = 3
+retry_delay = 1
+
+def get_db_connection():
+    for attempt in range(max_retries):
+        try:
+            return db.engine.connect()
+        except OperationalError as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Database connection attempt {attempt + 1} failed. Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                logger.error(f"Failed to connect to the database after {max_retries} attempts.")
+                raise
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -194,9 +212,11 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
     return cover_letter, company_name, job_title
 
 def handle_db_error(e):
-    logging.error(f"Database error: {str(e)}")
+    logger.error(f"Database error: {str(e)}")
+    if isinstance(e, OperationalError):
+        logger.error("This might be an SSL connection error. Please check your database configuration and SSL settings.")
     db.session.rollback()
-    flash("An error occurred. Please try again.", "error")
+    flash("An error occurred while accessing the database. Please try again later.", "error")
 
 @app.route('/')
 def index():
@@ -212,16 +232,18 @@ def register():
         last_name = request.form.get('last_name')
 
         try:
-            user = User.query.filter_by(username=username).first()
-            if user:
-                flash('Username already exists')
-                return redirect(url_for('register'))
+            with get_db_connection() as conn:
+                user = User.query.filter_by(username=username).first()
+                if user:
+                    flash('Username already exists')
+                    return redirect(url_for('register'))
 
-            new_user = User(username=username, email=email, first_name=first_name, last_name=last_name, cover_letter_format=COVERLETTER_FORMAT)
-            new_user.set_password(password)
-            db.session.add(new_user)
-            db.session.commit()
-            return redirect(url_for('login'))
+                new_user = User(username=username, email=email, first_name=first_name, last_name=last_name, cover_letter_format=COVERLETTER_FORMAT)
+                new_user.set_password(password)
+                db.session.add(new_user)
+                db.session.commit()
+                logger.info(f"New user registered: {username}")
+                return redirect(url_for('login'))
         except SQLAlchemyError as e:
             handle_db_error(e)
             return redirect(url_for('register'))
@@ -262,69 +284,70 @@ def submit():
         resume_selection = request.form.get('resume_selection')
 
         try:
-            if resume_selection and resume_selection != 'new':
-                resume = Resume.query.get(resume_selection)
-                if resume and resume.user_id == current_user.id:
-                    resume_text = resume.content
-                    filename = resume.filename
+            with get_db_connection() as conn:
+                if resume_selection and resume_selection != 'new':
+                    resume = Resume.query.get(resume_selection)
+                    if resume and resume.user_id == current_user.id:
+                        resume_text = resume.content
+                        filename = resume.filename
+                    else:
+                        flash('Invalid resume selection')
+                        return redirect(request.url)
                 else:
-                    flash('Invalid resume selection')
-                    return redirect(request.url)
-            else:
-                if 'resume' not in request.files:
-                    logger.warning("No file part in the request")
-                    flash('No file part')
-                    return redirect(request.url)
-                file = request.files['resume']
+                    if 'resume' not in request.files:
+                        logger.warning("No file part in the request")
+                        flash('No file part')
+                        return redirect(request.url)
+                    file = request.files['resume']
 
-                if file.filename == '':
-                    logger.warning("No selected file")
-                    flash('No selected file')
-                    return redirect(request.url)
+                    if file.filename == '':
+                        logger.warning("No selected file")
+                        flash('No selected file')
+                        return redirect(request.url)
 
-                if file and allowed_file(file.filename):
-                    filename = secure_filename(file.filename)
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(filepath)
-                    logger.info(f"File saved: {filepath}")
+                    if file and allowed_file(file.filename):
+                        filename = secure_filename(file.filename)
+                        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                        file.save(filepath)
+                        logger.info(f"File saved: {filepath}")
 
-                    resume_text = extract_text_from_pdf(filepath)
+                        resume_text = extract_text_from_pdf(filepath)
 
-                    new_resume = Resume(filename=filename, content=resume_text, user_id=current_user.id)
-                    db.session.add(new_resume)
-                    db.session.commit()
+                        new_resume = Resume(filename=filename, content=resume_text, user_id=current_user.id)
+                        db.session.add(new_resume)
+                        db.session.commit()
 
-                    os.remove(filepath)
-                    logger.info(f"Temporary file removed: {filepath}")
-                else:
-                    logger.warning("Invalid file type")
-                    flash('Invalid file type. Please upload a PDF file.')
-                    return redirect(request.url)
+                        os.remove(filepath)
+                        logger.info(f"Temporary file removed: {filepath}")
+                    else:
+                        logger.warning("Invalid file type")
+                        flash('Invalid file type. Please upload a PDF file.')
+                        return redirect(request.url)
 
-            focus_areas = request.form.get('focus_areas')
-            job_description = request.form.get('job_description')
+                focus_areas = request.form.get('focus_areas')
+                job_description = request.form.get('job_description')
 
-            logger.info("Generating cover letter suggestion")
-            cover_letter, company_name, job_title = generate_cover_letter_suggestion(
-                resume_text, focus_areas, job_description, current_user.first_name,
-                current_user.last_name, current_user.ai_model,
-                current_user.cover_letter_format)
+                logger.info("Generating cover letter suggestion")
+                cover_letter, company_name, job_title = generate_cover_letter_suggestion(
+                    resume_text, focus_areas, job_description, current_user.first_name,
+                    current_user.last_name, current_user.ai_model,
+                    current_user.cover_letter_format)
 
-            logger.info(f"Extracted company name: {company_name}")
-            logger.info(f"Extracted job title: {job_title}")
+                logger.info(f"Extracted company name: {company_name}")
+                logger.info(f"Extracted job title: {job_title}")
 
-            new_submission = Submission(resume_text=resume_text,
-                                        focus_areas=focus_areas,
-                                        job_description=job_description,
-                                        cover_letter=cover_letter,
-                                        company_name=company_name,
-                                        job_title=job_title,
-                                        user_id=current_user.id)
-            db.session.add(new_submission)
-            db.session.commit()
-            logger.info(f"New submission created: {new_submission.id}")
+                new_submission = Submission(resume_text=resume_text,
+                                            focus_areas=focus_areas,
+                                            job_description=job_description,
+                                            cover_letter=cover_letter,
+                                            company_name=company_name,
+                                            job_title=job_title,
+                                            user_id=current_user.id)
+                db.session.add(new_submission)
+                db.session.commit()
+                logger.info(f"New submission created: {new_submission.id}")
 
-            return redirect(url_for('result', submission_id=new_submission.id))
+                return redirect(url_for('result', submission_id=new_submission.id))
         except SQLAlchemyError as e:
             handle_db_error(e)
             return redirect(request.url)
@@ -483,8 +506,8 @@ def reset_password(token):
 if __name__ == '__main__':
     with app.app_context():
         try:
-            db.create_all()
-            with db.engine.connect() as conn:
+            with get_db_connection() as conn:
+                db.create_all()
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS first_name VARCHAR(80)'))
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_name VARCHAR(80)'))
                 conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_model VARCHAR(20) DEFAULT \'gpt-3.5-turbo\''))
@@ -495,7 +518,10 @@ if __name__ == '__main__':
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)'))
                 conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS job_title VARCHAR(255)'))
                 conn.commit()
+            logger.info("Database schema updated successfully")
         except SQLAlchemyError as e:
-            handle_db_error(e)
+            logger.error(f"Error updating database schema: {str(e)}")
+            if isinstance(e, OperationalError):
+                logger.error("This might be an SSL connection error. Please check your database configuration and SSL settings.")
 
     app.run(host='0.0.0.0', port=5000, debug=True)

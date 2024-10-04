@@ -157,6 +157,17 @@ flask = ">=2.2.5"
 sqlalchemy = ">=2.0.16"
 
 [[package]]
+name = "flask-talisman"
+version = "1.1.0"
+description = "HTTP security headers for Flask."
+optional = false
+python-versions = "*"
+files = [
+    {file = "flask-talisman-1.1.0.tar.gz", hash = "sha256:c5f486f5f54420729f84b3c3850cd63f96e8b033a9629bee66c524ea363797ff"},
+    {file = "flask_talisman-1.1.0-py2.py3-none-any.whl", hash = "sha256:3c42b610ebe49b0e35ca150e179bf51aa1da01e4635b49a674868ea681046208"},
+]
+
+[[package]]
 name = "greenlet"
 version = "3.0.3"
 description = "Lightweight in-process concurrent programming"
@@ -1038,4 +1049,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "3434998e2cabb9b8020c0bcc1fc6ca3a30ddcb3f619ad5c33da2816479256cbc"
+content-hash = "f26b1408d322e83c83e10483755c1621a6a90fb251afd5b59b77be6a30ecd66a"

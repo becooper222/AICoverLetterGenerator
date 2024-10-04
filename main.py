@@ -17,7 +17,6 @@ from docx.shared import Pt
 from docx.enum.style import WD_STYLE_TYPE
 import secrets
 from flask_mail import Mail, Message
-from flask_talisman import Talisman
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -49,21 +48,6 @@ app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')
 mail = Mail(app)
-
-talisman = Talisman(
-    app,
-    content_security_policy={
-        'default-src': "'self'",
-        'script-src': "'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-        'style-src': "'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-        'img-src': "'self' data:",
-        'font-src': "'self' https://cdn.jsdelivr.net",
-    },
-    force_https=True,
-    strict_transport_security=True,
-    session_cookie_secure=True,
-    session_cookie_http_only=True
-)
 
 ALLOWED_EXTENSIONS = {'pdf'}
 
@@ -540,4 +524,4 @@ if __name__ == '__main__':
             if isinstance(e, OperationalError):
                 logger.error("This might be an SSL connection error. Please check your database configuration and SSL settings.")
 
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)

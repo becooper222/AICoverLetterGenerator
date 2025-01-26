@@ -1,22 +1,39 @@
 # AI Cover Letter Generator
 
-A powerful tool that helps you generate personalized cover letters using AI technology.
+A powerful web application that helps you generate personalized cover letters using AI technology. The application is hosted on Vercel and can be accessed at [insert-your-vercel-url].
 
 ## Features
 
 - Customized cover letter generation based on job descriptions and your resume
 - Professional formatting and structure
-- Easy-to-use interface
+- Easy-to-use web interface
 - Time-saving solution for job applications
+- Instantly accessible through any web browser
+- Secure user accounts to save and manage your cover letters
+
+## Live Demo
+
+Visit our live application at [insert-your-vercel-url]
+
+**Note:** You'll need to create an account to use the application. Registration is free and only requires an email address.
+
+## Technology Stack
+
+- Frontend: React.js
+- Backend: Node.js
+- Hosting: Vercel
+- AI Integration: OpenAI API
+- Authentication: NextAuth.js
 
 ## Getting Started
 
 ### Prerequisites
 
-- Python 3.x
-- Required Python packages (listed in `requirements.txt`)
+- Node.js
+- npm or yarn
+- Required packages (listed in `package.json`)
 
-### Installation
+### Local Development
 
 1. Clone the repository:
 ```bash
@@ -26,28 +43,47 @@ cd AICoverLetterGenerator
 
 2. Install dependencies:
 ```bash
-pip install -r requirements.txt
+npm install
+# or
+yarn install
 ```
+
+3. Start the development server:
+```bash
+npm run dev
+# or
+yarn dev
+```
+
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+### Deployment
+
+This project is deployed on Vercel. To deploy your own instance:
+
+1. Fork this repository
+2. Create a Vercel account if you haven't already
+3. Connect your repository to Vercel
+4. Configure your environment variables
+5. Deploy!
 
 ## Usage
 
-1. Prepare your resume and the job description
-2. Run the application
-3. Input your details and preferences
-4. Generate your personalized cover letter
+1. Visit the website
+2. Create an account or sign in
+3. Upload or paste your resume
+4. Input the job description
+5. Generate your personalized cover letter
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Acknowledgments
 
 - Thanks to all contributors who have helped with this project
 - Special thanks to the open-source community
+- Powered by Vercel
 
 ## Support
 

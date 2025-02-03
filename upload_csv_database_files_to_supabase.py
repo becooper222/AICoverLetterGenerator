@@ -7,11 +7,11 @@ import os
 load_dotenv()
 
 # Fetch database credentials
-USER = os.getenv("user")
-PASSWORD = os.getenv("password")
-HOST = os.getenv("host")
-PORT = os.getenv("port")
-DBNAME = os.getenv("dbname")
+USER = os.getenv("POSTGRES_USER")
+PASSWORD = os.getenv("POSTGRES_PASSWORD")
+HOST = os.getenv("POSTGRES_HOST")
+PORT = "5432"  # Supabase uses default PostgreSQL port
+DBNAME = os.getenv("POSTGRES_DATABASE")
 
 # Path to your CSV files (Update these paths if needed)
 csv_files = {
@@ -27,7 +27,8 @@ try:
         password=PASSWORD,
         host=HOST,
         port=PORT,
-        dbname=DBNAME
+        dbname=DBNAME,
+        sslmode='require'  # Required for Supabase
     )
     print("✅ Connection to Supabase successful!")
 

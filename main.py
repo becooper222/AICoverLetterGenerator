@@ -33,6 +33,9 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 3600,
     'pool_pre_ping': True,
     'pool_timeout': 30,
+    'connect_args': {
+        'sslmode': 'require'  # Required for Supabase
+    }
 }
 
 db = SQLAlchemy(app)

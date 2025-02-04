@@ -251,11 +251,7 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
             if not api_key:
                 logger.error("OPENAI_API_KEY environment variable is not set")
                 raise ValueError("OpenAI API key is not configured")
-            
-            #########################################################
-            logger.info(f"Using OpenAI API key: {api_key}")
-            #########################################################
-            
+
             client = OpenAI(api_key=api_key)
             logger.info("Successfully initialized OpenAI client")
         except Exception as e:

@@ -185,11 +185,8 @@ def load_user(user_id):
 
 def extract_company_and_job_title(job_description):
     try:
-        # Initialize OpenAI client with only the API key
-        client = OpenAI(
-            api_key=os.getenv('OPENAI_API_KEY'),
-            base_url="https://api.openai.com/v1"  # Explicitly set the base URL
-        )
+        # Initialize OpenAI client with just the API key
+        client = OpenAI()  # It will automatically use OPENAI_API_KEY from environment
 
         prompt = f"""
         Extract the company name and job title from the following job description:
@@ -219,7 +216,7 @@ def extract_company_and_job_title(job_description):
 
         extracted_info = response.choices[0].message.content
         company_name = ""
-        job_title = "" 
+        job_title = ""
 
         for line in extracted_info.split('\n'):
             if line.startswith("Company:"):
@@ -237,11 +234,8 @@ def extract_company_and_job_title(job_description):
 
 def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, first_name, last_name, ai_model, cover_letter_format):
     try:
-        # Initialize OpenAI client with only the API key
-        client = OpenAI(
-            api_key=os.getenv('OPENAI_API_KEY'),
-            base_url="https://api.openai.com/v1"  # Explicitly set the base URL
-        )
+        # Initialize OpenAI client with just the API key
+        client = OpenAI()  # It will automatically use OPENAI_API_KEY from environment
 
         company_name, job_title = extract_company_and_job_title(job_description)
 

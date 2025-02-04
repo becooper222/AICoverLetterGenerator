@@ -219,7 +219,7 @@ def extract_company_and_job_title(job_description):
 
         extracted_info = response.choices[0].message.content
         company_name = ""
-        job_title = ""
+        job_title = "" 
 
         for line in extracted_info.split('\n'):
             if line.startswith("Company:"):

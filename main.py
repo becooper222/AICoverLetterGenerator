@@ -230,16 +230,40 @@ def extract_company_and_job_title(job_description):
         return company_name, job_title
     except Exception as e:
         logger.error(f"Error extracting company and job title: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error details: {str(e)}")
         raise
 
 def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, first_name, last_name, ai_model, cover_letter_format):
     try:
-        # Initialize OpenAI client with just the API key
-        client = OpenAI()  # It will automatically use OPENAI_API_KEY from environment
+        logger.info("Starting cover letter generation process")
+        # Override ai_model parameter to use default model
 
+        #########################################################
+        ai_model = "gpt-4o-2024-11-20" # Look here when you want to change the model back to using the user specified model
+        #########################################################
+
+        logger.info(f"Using AI model: {ai_model}")
+        
+        # Initialize OpenAI client with API key from environment
+        try:
+            api_key = os.getenv('OPENAI_API_KEY')
+            if not api_key:
+                logger.error("OPENAI_API_KEY environment variable is not set")
+                raise ValueError("OpenAI API key is not configured")
+                
+            client = OpenAI(api_key=api_key)
+            logger.info("Successfully initialized OpenAI client")
+        except Exception as e:
+            logger.error(f"Failed to initialize OpenAI client: {str(e)}")
+            raise
+
+        logger.info("Extracting company and job title")
         company_name, job_title = extract_company_and_job_title(job_description)
+        logger.info(f"Extracted - Company: {company_name}, Job Title: {job_title}")
 
         current_date = date.today().strftime("%B %d, %Y")
+        logger.info(f"Using current date: {current_date}")
 
         static_prompt = "You are a professional cover letter writer."
 
@@ -258,20 +282,30 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
             f"Please generate a cover letter that highlights my fit for this role, includes my name, the current date ({current_date}), and matches the format described in Cover Letter Format section."
         )
         
-        response = client.chat.completions.create(
-            model="gpt-4o-2024-11-20",  # Using a stable model for cover letter generation
-            messages=[
-                {"role": "system", "content": "You are a helpful cover letter writing assistant."},
-                {"role": "user", "content": full_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=2000
-        )
+        logger.info("Sending request to OpenAI API")
+        try:
+            response = client.chat.completions.create(
+                model=ai_model,  # Using the user's selected model
+                messages=[
+                    {"role": "system", "content": "You are a helpful cover letter writing assistant."},
+                    {"role": "user", "content": full_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            logger.info("Successfully received response from OpenAI API")
+        except Exception as e:
+            logger.error(f"OpenAI API request failed: {str(e)}")
+            raise
 
         cover_letter = response.choices[0].message.content
+        logger.info("Successfully generated cover letter")
+        
         return cover_letter, company_name, job_title
     except Exception as e:
         logger.error(f"Error generating cover letter: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"Error details: {str(e)}")
         raise
 
 def handle_db_error(e):

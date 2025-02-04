@@ -29,12 +29,13 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_size': 10,
-    'pool_recycle': 3600,
+    'pool_size': 20,
+    'pool_recycle': 300,
     'pool_pre_ping': True,
     'pool_timeout': 30,
     'connect_args': {
-        'sslmode': 'require'  # Required for Supabase
+        'sslmode': 'require',  # Required for Supabase
+        'application_name': 'ai_cover_letter_generator'
     }
 }
 
@@ -69,28 +70,37 @@ retry_delay = 1
 def get_db_connection():
     for attempt in range(max_retries):
         try:
-            return db.engine.connect()
+            connection = db.engine.connect()
+            # Test the connection with a simple query
+            connection.execute(text('SELECT 1'))
+            return connection
         except OperationalError as e:
             if attempt < max_retries - 1:
                 logger.warning(f"Database connection attempt {attempt + 1} failed. Retrying in {retry_delay} seconds...")
-                time.sleep(retry_delay)
+                time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
             else:
-                logger.error(f"Failed to connect to the database after {max_retries} attempts.")
+                logger.error(f"Failed to connect to Supabase PostgreSQL after {max_retries} attempts.")
+                logger.error(f"Error details: {str(e)}")
                 raise
+        except SQLAlchemyError as e:
+            logger.error(f"Unexpected database error: {str(e)}")
+            raise
 
 class User(UserMixin, db.Model):
+    __tablename__ = 'user'
+    
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     first_name = db.Column(db.String(80), nullable=False)
     last_name = db.Column(db.String(80), nullable=False)
-    password_hash = db.Column(db.String(255))
+    password_hash = db.Column(db.String(255), nullable=False)
     ai_model = db.Column(db.String(20), default='gpt-4o-2024-08-06')
     reset_token = db.Column(db.String(100), unique=True)
     reset_token_expiration = db.Column(db.DateTime)
     cover_letter_format = db.Column(db.Text, default=COVERLETTER_FORMAT)
-    submissions = db.relationship('Submission', backref='user', lazy='dynamic')
-    resumes = db.relationship('Resume', backref='user', lazy='dynamic')
+    submissions = db.relationship('Submission', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    resumes = db.relationship('Resume', backref='user', lazy='dynamic', cascade='all, delete-orphan')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -115,6 +125,8 @@ class User(UserMixin, db.Model):
         return True
 
 class Submission(db.Model):
+    __tablename__ = 'submission'
+    
     id = db.Column(db.Integer, primary_key=True)
     resume_text = db.Column(db.Text, nullable=False)
     focus_areas = db.Column(db.Text, nullable=False)
@@ -122,14 +134,16 @@ class Submission(db.Model):
     cover_letter = db.Column(db.Text, nullable=False)
     company_name = db.Column(db.String(255))
     job_title = db.Column(db.String(255))
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 class Resume(db.Model):
+    __tablename__ = 'resume'
+    
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 @login_manager.user_loader
@@ -510,16 +524,29 @@ if __name__ == '__main__':
     with app.app_context():
         try:
             with get_db_connection() as conn:
+                # Create tables if they don't exist
                 db.create_all()
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS first_name VARCHAR(80)'))
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_name VARCHAR(80)'))
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_model VARCHAR(20) DEFAULT \'gpt-3.5-turbo\''))
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100)'))
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token_expiration TIMESTAMP'))
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS cover_letter_format TEXT'))
-                conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP'))
-                conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)'))
-                conn.execute(text('ALTER TABLE submission ADD COLUMN IF NOT EXISTS job_title VARCHAR(255)'))
+                
+                # Add necessary columns with proper types for Supabase
+                conn.execute(text('''
+                    ALTER TABLE "user" ADD COLUMN IF NOT EXISTS first_name VARCHAR(80);
+                    ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_name VARCHAR(80);
+                    ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_model VARCHAR(20) DEFAULT 'gpt-3.5-turbo';
+                    ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100);
+                    ALTER TABLE "user" ADD COLUMN IF NOT EXISTS reset_token_expiration TIMESTAMP;
+                    ALTER TABLE "user" ADD COLUMN IF NOT EXISTS cover_letter_format TEXT;
+                    
+                    ALTER TABLE submission ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                    ALTER TABLE submission ADD COLUMN IF NOT EXISTS company_name VARCHAR(255);
+                    ALTER TABLE submission ADD COLUMN IF NOT EXISTS job_title VARCHAR(255);
+                    
+                    -- Add indexes for better performance
+                    CREATE INDEX IF NOT EXISTS idx_user_username ON "user" (username);
+                    CREATE INDEX IF NOT EXISTS idx_user_email ON "user" (email);
+                    CREATE INDEX IF NOT EXISTS idx_submission_user_id ON submission (user_id);
+                    CREATE INDEX IF NOT EXISTS idx_submission_created_at ON submission (created_at DESC);
+                    CREATE INDEX IF NOT EXISTS idx_resume_user_id ON resume (user_id);
+                '''))
                 conn.commit()
             logger.info("Database schema updated successfully")
         except SQLAlchemyError as e:

@@ -199,7 +199,7 @@ def extract_company_and_job_title(job_description):
         """
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini-2024-07-18",
+            model="gpt-4o-mini",  # Using a stable model for extraction
             messages=[
                 {
                     "role": "system",
@@ -259,7 +259,7 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
         )
         
         response = client.chat.completions.create(
-            model="gpt-4o-latest",
+            model="gpt-4o-2024-11-20",  # Using a stable model for cover letter generation
             messages=[
                 {"role": "system", "content": "You are a helpful cover letter writing assistant."},
                 {"role": "user", "content": full_prompt}

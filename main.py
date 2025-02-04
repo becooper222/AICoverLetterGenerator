@@ -184,79 +184,93 @@ def load_user(user_id):
         return None
 
 def extract_company_and_job_title(job_description):
-    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    try:
+        client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
-    prompt = f"""
-    Extract the company name and job title from the following job description:
-    
-    {job_description}
-    
-    Return the information in the following format:
-    Company: [Company Name]
-    Job Title: [Job Title]
-    """
+        prompt = f"""
+        Extract the company name and job title from the following job description:
+        
+        {job_description}
+        
+        Return the information in the following format:
+        Company: [Company Name]
+        Job Title: [Job Title]
+        """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{
-            "role": "system",
-            "content": "You are a helpful assistant that extracts company names and job titles from job descriptions."
-        }, {
-            "role": "user",
-            "content": prompt
-        }])
+        response = client.chat.completions.create(
+            model="gpt-4o-mini-2024-07-18",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant that extracts company names and job titles from job descriptions."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0.3,
+            max_tokens=100
+        )
 
-    extracted_info = response.choices[0].message.content
-    company_name = ""
-    job_title = ""
+        extracted_info = response.choices[0].message.content
+        company_name = ""
+        job_title = ""
 
-    for line in extracted_info.split('\n'):
-        if line.startswith("Company:"):
-            company_name = line.split("Company:")[1].strip()
-        elif line.startswith("Job Title:"):
-            job_title = line.split("Job Title:")[1].strip()
+        for line in extracted_info.split('\n'):
+            if line.startswith("Company:"):
+                company_name = line.split("Company:")[1].strip()
+            elif line.startswith("Job Title:"):
+                job_title = line.split("Job Title:")[1].strip()
 
-    logger.info(f"Extracted company name: {company_name}")
-    logger.info(f"Extracted job title: {job_title}")
+        logger.info(f"Extracted company name: {company_name}")
+        logger.info(f"Extracted job title: {job_title}")
 
-    return company_name, job_title
+        return company_name, job_title
+    except Exception as e:
+        logger.error(f"Error extracting company and job title: {str(e)}")
+        raise
 
 def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, first_name, last_name, ai_model, cover_letter_format):
-    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    try:
+        client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
-    company_name, job_title = extract_company_and_job_title(job_description)
+        company_name, job_title = extract_company_and_job_title(job_description)
 
-    current_date = date.today().strftime("%B %d, %Y")
+        current_date = date.today().strftime("%B %d, %Y")
 
-    static_prompt = "You are a professional cover letter writer."
+        static_prompt = "You are a professional cover letter writer."
 
-    full_prompt = (
-        f"{static_prompt}\n\n"
-        f"Candidate Name: {first_name} {last_name}\n\n"
-        f"Current Date: {current_date}\n\n"
-        f"Company: {company_name}\n"
-        f"Job Title: {job_title}\n\n"
-        f"Job Description: {job_description}\n\n"
-        f"Cover Letter Format: {cover_letter_format}\n\n"
-        f"Focus: {focus_areas}\n\n"
-        f"My Resume:\n{resume_text}\n\n"
-        f"Things to avoid in the writing:\n"
-        "Do not use the phrase 'as advertised'. Do not use the word 'tenure'\n\n"
-        f"Please generate a cover letter that highlights my fit for this role, includes my name, the current date ({current_date}), and matches the format described in Cover Letter Format section."
-    )
+        full_prompt = (
+            f"{static_prompt}\n\n"
+            f"Candidate Name: {first_name} {last_name}\n\n"
+            f"Current Date: {current_date}\n\n"
+            f"Company: {company_name}\n"
+            f"Job Title: {job_title}\n\n"
+            f"Job Description: {job_description}\n\n"
+            f"Cover Letter Format: {cover_letter_format}\n\n"
+            f"Focus: {focus_areas}\n\n"
+            f"My Resume:\n{resume_text}\n\n"
+            f"Things to avoid in the writing:\n"
+            "Do not use the phrase 'as advertised'. Do not use the word 'tenure'\n\n"
+            f"Please generate a cover letter that highlights my fit for this role, includes my name, the current date ({current_date}), and matches the format described in Cover Letter Format section."
+        )
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-latest",
+            messages=[
+                {"role": "system", "content": "You are a helpful cover letter writing assistant."},
+                {"role": "user", "content": full_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
 
-    response = client.chat.completions.create(
-        model=ai_model,
-        messages=[{
-            "role": "system",
-            "content": "You are a helpful cover letter writing assistant."
-        }, {
-            "role": "user",
-            "content": full_prompt
-        }])
-
-    cover_letter = response.choices[0].message.content
-    return cover_letter, company_name, job_title
+        cover_letter = response.choices[0].message.content
+        return cover_letter, company_name, job_title
+    except Exception as e:
+        logger.error(f"Error generating cover letter: {str(e)}")
+        raise
 
 def handle_db_error(e):
     logger.error(f"Database error: {str(e)}")

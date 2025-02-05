@@ -560,8 +560,8 @@ def download_cover_letter(submission_id):
     document.save(doc_io)
     doc_io.seek(0)
 
-    filename = f"{submission.company_name} - {submission.job_title} Cover Letter.docx"
-    filename = "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_', '.'))  # Sanitize filename
+    filename = f"{submission.company_name}, {submission.job_title} Cover Letter.docx"
+    filename = "".join(c for c in filename if c.isalnum() or c in (' ', ',', '-', '_', '.'))  # Sanitize filename
 
     return send_file(
         doc_io,

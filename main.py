@@ -542,8 +542,8 @@ def delete_resume(resume_id):
 @app.route('/download_cover_letter/<int:submission_id>')
 @login_required
 def download_cover_letter(submission_id):
-    submission = Submission.query.get_or_404(submission_id)
-    if submission.user_id != current_user.id:
+    submission = Submission.get_by_id(submission_id)
+    if not submission or submission.user_id != current_user.id:
         flash('You do not have permission to download this cover letter.')
         return redirect(url_for('dashboard'))
 
@@ -560,11 +560,14 @@ def download_cover_letter(submission_id):
     document.save(doc_io)
     doc_io.seek(0)
 
+    filename = f"{submission.company_name} - {submission.job_title} Cover Letter.docx"
+    filename = "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_', '.'))  # Sanitize filename
+
     return send_file(
         doc_io,
         mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         as_attachment=True,
-        download_name=f"{submission.company_name}, {submission.job_title} Cover Letter.docx")
+        download_name=filename)
 
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required

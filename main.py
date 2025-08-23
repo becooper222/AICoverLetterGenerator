@@ -1,4 +1,5 @@
 import os
+import json
 import time
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, send_file
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -294,20 +295,41 @@ def extract_company_and_job_title(job_description, ai_model):
         Company: [Company Name]
         Job Title: [Job Title]
         """
-        extracted_info = _generate_with_model(
-            ai_model or 'gemini-2.5-pro',
-            f"You are a helpful assistant that extracts company names and job titles from job descriptions.\n\n{prompt}",
-            temperature=0.3,
-            max_tokens=120
+        # Always use OpenAI gpt-5-nano for extraction, independent of user model
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            raise ValueError('OpenAI API key is not configured')
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model='gpt-5-nano',
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Extract company and job title. Return ONLY a compact JSON object with keys 'company' and 'job_title'. No extra text."
+                },
+                {
+                    "role": "user",
+                    "content": job_description
+                }
+            ],
+            temperature=0.0,
+            response_format={"type": "json_object"},
+            max_tokens=150
         )
+        content = response.choices[0].message.content or "{}"
         company_name = ""
         job_title = ""
-
-        for line in extracted_info.split('\n'):
-            if line.startswith("Company:"):
-                company_name = line.split("Company:")[1].strip()
-            elif line.startswith("Job Title:"):
-                job_title = line.split("Job Title:")[1].strip()
+        try:
+            data = json.loads(content)
+            company_name = (data.get("company") or "").strip()
+            job_title = (data.get("job_title") or "").strip()
+        except Exception:
+            # Fallback: naive parse if JSON not returned
+            for line in content.split('\n'):
+                if line.lower().startswith("company"):
+                    company_name = line.split(":", 1)[-1].strip()
+                elif line.lower().startswith("job title"):
+                    job_title = line.split(":", 1)[-1].strip()
 
         logger.info(f"Extracted company name: {company_name}")
         logger.info(f"Extracted job title: {job_title}")

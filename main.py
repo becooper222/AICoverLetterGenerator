@@ -284,7 +284,7 @@ def _generate_with_model(model_name: str, prompt: str, temperature: float = 0.7,
         logger.error(f"LLM generation failed for model {model_name}: {str(e)}")
         raise
 
-def extract_company_and_job_title(job_description, ai_model):
+def extract_company_and_job_title(job_description):
     try:
         prompt = f"""
         Extract the company name and job title from the following job description:
@@ -296,6 +296,7 @@ def extract_company_and_job_title(job_description, ai_model):
         Job Title: [Job Title]
         """
         # Always use OpenAI gpt-5-nano for extraction, independent of user model
+        logger.info("Extracting company and job title using OpenAI model: gpt-5-nano")
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
             raise ValueError('OpenAI API key is not configured')
@@ -350,7 +351,7 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
         logger.info(f"Using AI model: {ai_model}")
         
         logger.info("Extracting company and job title")
-        company_name, job_title = extract_company_and_job_title(job_description, ai_model)
+        company_name, job_title = extract_company_and_job_title(job_description)
         logger.info(f"Extracted - Company: {company_name}, Job Title: {job_title}")
 
         current_date = date.today().strftime("%B %d, %Y")

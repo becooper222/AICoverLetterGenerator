@@ -20,6 +20,11 @@ try:
     import google.generativeai as genai
 except Exception:
     genai = None
+try:
+    from google.generativeai.types import HarmCategory, HarmBlockThreshold
+except Exception:
+    HarmCategory = None
+    HarmBlockThreshold = None
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -200,11 +205,63 @@ def _generate_with_model(model_name: str, prompt: str, temperature: float = 0.7,
                 raise ValueError('Google API key is not configured')
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt, generation_config={
-                'temperature': temperature,
-                'max_output_tokens': max_tokens
-            })
-            return getattr(response, 'text', None) or (response.candidates[0].content.parts[0].text if getattr(response, 'candidates', None) else '')
+            # Configure safety settings to block only high-risk content
+            if HarmCategory is not None and HarmBlockThreshold is not None:
+                safety_settings = {
+                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                    HarmCategory.HARM_CATEGORY_SEXUAL_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+                }
+            else:
+                safety_settings = [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+                    {"category": "HARM_CATEGORY_SEXUAL_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
+                ]
+            response = model.generate_content(
+                prompt,
+                generation_config={
+                    'temperature': temperature,
+                    'max_output_tokens': max_tokens
+                },
+                safety_settings=safety_settings
+            )
+            # Safely extract text without touching response.text accessor
+            text_chunks = []
+            candidates = getattr(response, 'candidates', None) or []
+            for cand in candidates:
+                content = getattr(cand, 'content', None)
+                parts = getattr(content, 'parts', None) or []
+                for part in parts:
+                    part_text = getattr(part, 'text', None)
+                    if part_text:
+                        text_chunks.append(part_text)
+            if text_chunks:
+                return "".join(text_chunks)
+            # If no parts produced text, attempt a graceful fallback to OpenAI
+            finish_reason = None
+            if candidates:
+                fr = getattr(candidates[0], 'finish_reason', None)
+                finish_reason = getattr(fr, 'name', fr)
+            logger.warning(f"Gemini returned no text (finish_reason={finish_reason}); attempting OpenAI fallback if configured.")
+            fallback_model = 'gpt-4o-mini' if max_tokens <= 200 else 'gpt-4o'
+            openai_key = os.getenv('OPENAI_API_KEY')
+            if openai_key:
+                client = OpenAI(api_key=openai_key)
+                response = client.chat.completions.create(
+                    model=fallback_model,
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                return response.choices[0].message.content
+            # No OpenAI fallback available
+            raise ValueError(f"No text returned from Gemini and no OpenAI fallback configured. finish_reason={finish_reason}")
         else:
             api_key = os.getenv('OPENAI_API_KEY')
             if not api_key:

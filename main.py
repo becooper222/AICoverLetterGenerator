@@ -16,6 +16,10 @@ import secrets
 from flask_mail import Mail, Message
 from supabase import create_client, Client
 from typing import Optional
+try:
+    import google.generativeai as genai
+except Exception:
+    genai = None
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -85,7 +89,7 @@ class User(UserMixin):
         self.first_name = user_data.get('first_name')
         self.last_name = user_data.get('last_name')
         self.password_hash = user_data.get('password_hash')
-        self.ai_model = user_data.get('ai_model', 'gpt-4o-2024-08-06')
+        self.ai_model = user_data.get('ai_model', 'gemini-2.5-pro')
         self.reset_token = user_data.get('reset_token')
         self.reset_token_expiration = user_data.get('reset_token_expiration')
         self.cover_letter_format = user_data.get('cover_letter_format', COVERLETTER_FORMAT)
@@ -183,11 +187,45 @@ def load_user(user_id):
         logger.error(f"Error loading user: {str(e)}")
         return None
 
-def extract_company_and_job_title(job_description):
-    try:
-        # Initialize OpenAI client with just the API key
-        client = OpenAI()  # It will automatically use OPENAI_API_KEY from environment
+def _is_google_model(model_name: str) -> bool:
+    return isinstance(model_name, str) and model_name.lower().startswith('gemini')
 
+def _generate_with_model(model_name: str, prompt: str, temperature: float = 0.7, max_tokens: int = 2000) -> str:
+    try:
+        if _is_google_model(model_name):
+            if genai is None:
+                raise RuntimeError('google-generativeai is not installed')
+            api_key = os.getenv('GOOGLE_API_KEY')
+            if not api_key:
+                raise ValueError('Google API key is not configured')
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt, generation_config={
+                'temperature': temperature,
+                'max_output_tokens': max_tokens
+            })
+            return getattr(response, 'text', None) or (response.candidates[0].content.parts[0].text if getattr(response, 'candidates', None) else '')
+        else:
+            api_key = os.getenv('OPENAI_API_KEY')
+            if not api_key:
+                raise ValueError('OpenAI API key is not configured')
+            client = OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            return response.choices[0].message.content
+    except Exception as e:
+        logger.error(f"LLM generation failed for model {model_name}: {str(e)}")
+        raise
+
+def extract_company_and_job_title(job_description, ai_model):
+    try:
         prompt = f"""
         Extract the company name and job title from the following job description:
         
@@ -197,24 +235,12 @@ def extract_company_and_job_title(job_description):
         Company: [Company Name]
         Job Title: [Job Title]
         """
-
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Using a stable model for extraction
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant that extracts company names and job titles from job descriptions."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
+        extracted_info = _generate_with_model(
+            ai_model or 'gemini-2.5-pro',
+            f"You are a helpful assistant that extracts company names and job titles from job descriptions.\n\n{prompt}",
             temperature=0.3,
-            max_tokens=100
+            max_tokens=120
         )
-
-        extracted_info = response.choices[0].message.content
         company_name = ""
         job_title = ""
 
@@ -237,29 +263,13 @@ def extract_company_and_job_title(job_description):
 def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, first_name, last_name, ai_model, cover_letter_format):
     try:
         logger.info("Starting cover letter generation process")
-        # Override ai_model parameter to use default model
-
-        #########################################################
-        ai_model = "gpt-4o-2024-11-20" # Look here when you want to change the model back to using the user specified model
-        #########################################################
+        # Use provided model or default to Gemini 2.5 Pro
+        ai_model = ai_model or 'gemini-2.5-pro'
 
         logger.info(f"Using AI model: {ai_model}")
         
-        # Initialize OpenAI client with API key from environment
-        try:
-            api_key = os.getenv('OPENAI_API_KEY')
-            if not api_key:
-                logger.error("OPENAI_API_KEY environment variable is not set")
-                raise ValueError("OpenAI API key is not configured")
-
-            client = OpenAI(api_key=api_key)
-            logger.info("Successfully initialized OpenAI client")
-        except Exception as e:
-            logger.error(f"Failed to initialize OpenAI client: {str(e)}")
-            raise
-
         logger.info("Extracting company and job title")
-        company_name, job_title = extract_company_and_job_title(job_description)
+        company_name, job_title = extract_company_and_job_title(job_description, ai_model)
         logger.info(f"Extracted - Company: {company_name}, Job Title: {job_title}")
 
         current_date = date.today().strftime("%B %d, %Y")
@@ -282,23 +292,13 @@ def generate_cover_letter_suggestion(resume_text, focus_areas, job_description, 
             f"Please generate a cover letter that highlights my fit for this role, includes my name, the current date ({current_date}), and matches the format described in Cover Letter Format section."
         )
         
-        logger.info("Sending request to OpenAI API")
+        logger.info("Sending request to LLM provider")
         try:
-            response = client.chat.completions.create(
-                model=ai_model,  # Using the user's selected model
-                messages=[
-                    {"role": "system", "content": "You are a helpful cover letter writing assistant."},
-                    {"role": "user", "content": full_prompt}
-                ],
-                temperature=0.7,
-                max_tokens=2000
-            )
-            logger.info("Successfully received response from OpenAI API")
+            cover_letter = _generate_with_model(ai_model, full_prompt, temperature=0.7, max_tokens=2000)
+            logger.info("Successfully received response from LLM provider")
         except Exception as e:
-            logger.error(f"OpenAI API request failed: {str(e)}")
+            logger.error(f"LLM request failed: {str(e)}")
             raise
-
-        cover_letter = response.choices[0].message.content
         logger.info("Successfully generated cover letter")
         
         return cover_letter, company_name, job_title
@@ -344,7 +344,7 @@ def register():
                 'last_name': last_name,
                 'password_hash': password_hash,
                 'cover_letter_format': COVERLETTER_FORMAT,
-                'ai_model': 'gpt-4o-2024-08-06'
+                'ai_model': 'gemini-2.5-pro'
             }
             
             response = supabase.table('user').insert(new_user_data).execute()

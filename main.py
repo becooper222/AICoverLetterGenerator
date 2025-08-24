@@ -327,37 +327,52 @@ def _generate_with_model(model_name: str, prompt: str, temperature: float = 0.7,
 
 def extract_company_and_job_title(job_description):
     try:
-        prompt = f"""
-        Extract the company name and job title from the following job description:
-        
-        {job_description}
-        
-        Return the information in the following format:
-        Company: [Company Name]
-        Job Title: [Job Title]
-        """
-        # Always use OpenAI gpt-5-nano for extraction, independent of user model
-        logger.info("Extracting company and job title using OpenAI model: gpt-5-nano")
+        logger.info("Extracting company and job title using OpenAI model: gpt-5-mini")
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
             raise ValueError('OpenAI API key is not configured')
         client = OpenAI(api_key=api_key)
+
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "company_job_title",
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "company": {"type": "string", "minLength": 1},
+                        "job_title": {"type": "string", "minLength": 1},
+                    },
+                    "required": ["company", "job_title"],
+                },
+                "strict": True,
+            },
+        }
+
         response = _openai_chat_create_with_backoff(
             client,
-            model='gpt-5-nano',
+            model='gpt-5-mini',
             messages=[
                 {
                     "role": "system",
-                    "content": "Extract company and job title. Return ONLY a compact JSON object with keys 'company' and 'job_title'. No extra text."
+                    "content": (
+                        "You extract fields from text. Return ONLY valid JSON matching the schema. "
+                        "If a field cannot be found, set it to 'unknown'."
+                    ),
                 },
                 {
                     "role": "user",
-                    "content": job_description
-                }
+                    "content": (
+                        "Extract the hiring company name and the job title from the job description below.\n\n"
+                        "Return JSON with keys 'company' and 'job_title' (strings). "
+                        "Use 'unknown' if either cannot be found.\n\n"
+                        f"Job Description:\n{job_description}"
+                    ),
+                },
             ],
-            temperature=0.0,
-            response_format={"type": "json_object"},
-            max_tokens=150
+            response_format=response_format,
+            max_completion_tokens=150,
         )
         content = response.choices[0].message.content or "{}"
         company_name = ""

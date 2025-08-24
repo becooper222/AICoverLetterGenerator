@@ -7,6 +7,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from utils.pdf_processor import extract_text_from_pdf
 from openai import OpenAI
+from openai import RateLimitError, APIConnectionError, APITimeoutError, InternalServerError
+try:
+    from openai import APIStatusError  # present in newer SDKs
+except Exception:  # pragma: no cover
+    APIStatusError = Exception
+import backoff
 from datetime import datetime, timedelta, date
 import logging
 import io
@@ -49,6 +55,39 @@ app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')
 mail = Mail(app)
+
+
+def _log_backoff(details):
+    wait = details.get('wait')
+    tries = details.get('tries')
+    target = details.get('target')
+    logger.warning(f"Rate limited/transient error. Backing off {wait:.2f}s before retry #{tries} for {getattr(target, '__name__', 'openai_call')}.")
+
+
+def _giveup_on_non_retryable(e: Exception) -> bool:
+    status_code = getattr(e, 'status_code', None)
+    # Give up for client errors other than rate limit
+    if status_code is not None and status_code not in (429, 500, 503, 504):
+        return True
+    return False
+
+
+@backoff.on_exception(
+    backoff.expo,
+    (
+        RateLimitError,
+        APIConnectionError,
+        APITimeoutError,
+        InternalServerError,
+        APIStatusError,
+    ),
+    max_tries=6,
+    jitter=backoff.full_jitter,
+    giveup=_giveup_on_non_retryable,
+    on_backoff=_log_backoff,
+)
+def _openai_chat_create_with_backoff(client: OpenAI, **kwargs):
+    return client.chat.completions.create(**kwargs)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -253,7 +292,8 @@ def _generate_with_model(model_name: str, prompt: str, temperature: float = 0.7,
             openai_key = os.getenv('OPENAI_API_KEY')
             if openai_key:
                 client = OpenAI(api_key=openai_key)
-                response = client.chat.completions.create(
+                response = _openai_chat_create_with_backoff(
+                    client,
                     model=fallback_model,
                     messages=[
                         {"role": "system", "content": "You are a helpful assistant."},
@@ -270,7 +310,8 @@ def _generate_with_model(model_name: str, prompt: str, temperature: float = 0.7,
             if not api_key:
                 raise ValueError('OpenAI API key is not configured')
             client = OpenAI(api_key=api_key)
-            response = client.chat.completions.create(
+            response = _openai_chat_create_with_backoff(
+                client,
                 model=model_name,
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
@@ -301,7 +342,8 @@ def extract_company_and_job_title(job_description):
         if not api_key:
             raise ValueError('OpenAI API key is not configured')
         client = OpenAI(api_key=api_key)
-        response = client.chat.completions.create(
+        response = _openai_chat_create_with_backoff(
+            client,
             model='gpt-5-nano',
             messages=[
                 {

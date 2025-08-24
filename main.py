@@ -252,7 +252,6 @@ def _generate_with_model(model_name: str, prompt: str, temperature: float = 0.7,
                     {"category": HarmCategory.HARM_CATEGORY_HATE_SPEECH, "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH},
                     {"category": HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH},
                     {"category": HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH},
-                    {"category": HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY, "threshold": HarmBlockThreshold.BLOCK_ONLY_HIGH},
                 ]
             else:
                 safety_settings = [
@@ -260,13 +259,11 @@ def _generate_with_model(model_name: str, prompt: str, temperature: float = 0.7,
                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
                     {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
                     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
-                    {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_ONLY_HIGH"},
                 ]
             response = model.generate_content(
                 prompt,
                 generation_config={
-                    'temperature': temperature,
-                    'max_output_tokens': max_tokens
+                    'temperature': temperature
                 },
                 safety_settings=safety_settings
             )

@@ -93,7 +93,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-ALLOWED_EXTENSIONS = {'pdf'}
+ALLOWED_EXTENSIONS = {'pdf'} 
 
 COVERLETTER_FORMAT = (
     "On the first line (line 1) include the candidate name and nothing else. On the next line (line 2), "

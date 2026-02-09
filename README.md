@@ -1,6 +1,6 @@
-# AI Cover Letter Generator
+# AI Cover Letter Generator 
 
-A powerful web application that helps you generate personalized cover letters using AI technology. The application is hosted on Vercel and can be accessed at [insert-your-vercel-url].
+A powerful web application (the website has been sunset due to getting a job) that helps you generate personalized cover letters using AI technology. The application is hosted on Vercel and can be accessed at [insert-your-vercel-url].
 
 ## Features
 
@@ -11,9 +11,6 @@ A powerful web application that helps you generate personalized cover letters us
 - Instantly accessible through any web browser
 - Secure user accounts to save and manage your cover letters
 
-## Live Demo
-
-Visit our live application at [insert-your-vercel-url]
 
 **Note:** You'll need to create an account to use the application. Registration is free and only requires an email address.
 
